@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Over-PO Analyzer v7</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- เพิ่ม Plugin สำหรับ Data Labels -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+        body { font-family: 'Sarabun', sans-serif; background-color: #f8fafc; }
+        .drop-zone { border: 2px dashed #cbd5e1; transition: all 0.3s; }
+        .drop-zone.active { border-color: #3b82f6; background-color: #eff6ff; }
+        .chart-container { position: relative; height: 280px; width: 100%; }
+        .donut-container { position: relative; height: 220px; width: 100%; }
+        th.sortable { cursor: pointer; user-select: none; transition: background 0.2s; }
+        th.sortable:hover { background-color: #e2e8f0; }
+        
+        /* Tabs */
+        .tab-btn { padding: 0.75rem 1.5rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab-btn:hover { color: #3b82f6; }
+        .tab-btn.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+        
+        /* Clickable Cards */
+        .clickable-card { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+        .clickable-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .clickable-card::after { content: '🔍 ดูข้อมูล'; position: absolute; top: 10px; right: 10px; font-size: 0.7rem; color: #94a3b8; opacity: 0; transition: opacity 0.2s; }
+        .clickable-card:hover::after { opacity: 1; }
+
+        /* Range Slider */
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #3b82f6; cursor: pointer; margin-top: -6px; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #cbd5e1; border-radius: 2px; }
+    </style>
+</head>
+<body class="min-h-screen pb-12 relative">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="hidden fixed inset-0 bg-slate-900 bg-opacity-80 z-50 flex flex-col items-center justify-center text-white backdrop-blur-sm">
+        <div class="w-64 bg-slate-700 rounded-full h-4 mb-4 overflow-hidden shadow-inner">
+            <div id="progressBar" class="bg-blue-500 h-4 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+        </div>
+        <p class="font-semibold text-lg" id="loadingText">กำลังอ่านไฟล์... 0%</p>
+    </div>
+
+    <!-- Data Modal (Pop-up) -->
+    <div id="dataModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-80 z-50 flex justify-center items-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-xl">
+                <h3 id="modalTitle" class="text-lg font-bold text-slate-800">รายละเอียดข้อมูล</h3>
+                <button onclick="closeModal('dataModal')" class="text-slate-400 hover:text-red-500 font-bold text-xl">&times;</button>
+            </div>
+            <div class="p-4 overflow-auto flex-1">
+                <table class="w-full text-left text-sm whitespace-nowrap">
+                    <thead class="bg-slate-100 text-slate-600 uppercase text-xs sticky top-0 shadow-sm z-10">
+                        <tr>
+                            <th class="p-2 font-semibold">Plant</th>
+                            <th class="p-2 font-semibold">Item / Desc / Remarks</th>
+                            <th class="p-2 font-semibold">Reason</th>
+                            <th class="p-2 font-semibold">Salesman</th>
+                            <th class="p-2 font-semibold text-right">อายุ (ด.)</th>
+                            <th class="p-2 font-semibold text-right text-orange-600">ค่าเผื่อ</th>
+                            <th class="p-2 font-semibold text-right text-red-600">เกินพีโอ</th>
+                            <th class="p-2 font-semibold">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalTableBody" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Report Modal -->
+    <div id="summaryModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-80 z-50 flex justify-center items-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center bg-indigo-50 rounded-t-xl">
+                <h3 class="text-lg font-bold text-indigo-800 flex items-center gap-2">📋 สรุปรายงานผู้บริหาร</h3>
+                <button onclick="closeModal('summaryModal')" class="text-slate-400 hover:text-red-500 font-bold text-xl">&times;</button>
+            </div>
+            <div class="p-6 overflow-auto flex-1">
+                <textarea id="summaryTextarea" class="w-full h-96 p-4 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500" readonly></textarea>
+            </div>
+            <div class="p-4 border-t bg-slate-50 rounded-b-xl flex justify-end gap-3">
+                <button onclick="closeModal('summaryModal')" class="px-4 py-2 border rounded-lg text-slate-600 hover:bg-slate-100 font-semibold text-sm">ปิด</button>
+                <button onclick="copySummaryReport()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold text-sm shadow-sm flex items-center gap-2">
+                    คัดลอกข้อความ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="bg-slate-800 text-white p-4 shadow-lg mb-6">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Inventory Analysis Tool
+            </h1>
+            <div class="flex gap-4 items-center">
+                <span class="text-sm text-slate-400">v7.0</span>
+                <button id="btnClearData" class="hidden text-xs bg-red-500 hover:bg-red-600 px-3 py-1 rounded transition">อัปโหลดไฟล์ใหม่</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4">
+        
+        <!-- Upload Section -->
+        <div id="uploadSection" class="card bg-white p-8 rounded-xl shadow-sm text-center mb-8">
+            <div id="dropZone" class="drop-zone p-12 rounded-lg cursor-pointer">
+                <input type="file" id="fileInput" class="hidden" accept=".csv">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-slate-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <h2 class="text-xl font-semibold mb-2">อัปโหลดไฟล์ข้อมูลสินค้าคงคลัง (.csv)</h2>
+            </div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="resultsSection" class="hidden">
+            
+            <!-- Global Filters -->
+            <div class="bg-white p-4 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-6 gap-4 items-end mb-6 border border-slate-200">
+                <div class="md:col-span-1">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">ค้นหา (SKU/Desc/Remark)</label>
+                    <input type="text" id="filterSearch" class="w-full border rounded px-2 py-1.5 text-sm" placeholder="ค้นหา...">
+                </div>
+                <div class="md:col-span-1">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Plant</label>
+                    <select id="filterPlant" class="w-full border rounded px-2 py-1.5 text-sm"><option value="all">ทั้งหมด</option></select>
+                </div>
+                <div class="md:col-span-1">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">SaleMan</label>
+                    <select id="filterSaleman" class="w-full border rounded px-2 py-1.5 text-sm"><option value="all">ทั้งหมด</option></select>
+                </div>
+                <div class="md:col-span-1">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Customer</label>
+                    <select id="filterCustomer" class="w-full border rounded px-2 py-1.5 text-sm"><option value="all">ทั้งหมด</option></select>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1 flex justify-between">
+                        <span>ช่วงอายุสต็อก (เดือน)</span>
+                        <span id="ageLabel" class="text-blue-600 font-bold">0 - 120</span>
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <input type="range" id="filterAgeMin" min="0" max="120" value="0" class="w-1/2">
+                        <input type="range" id="filterAgeMax" min="0" max="120" value="120" class="w-1/2">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs Header -->
+            <div class="flex border-b border-slate-200 mb-6 bg-white px-4 rounded-t-xl shadow-sm overflow-x-auto">
+                <button class="tab-btn active whitespace-nowrap" onclick="switchTab('exec', this)">📊 Executive Dashboard</button>
+                <button class="tab-btn whitespace-nowrap" onclick="switchTab('action', this)">📝 Action Management</button>
+                <button class="tab-btn whitespace-nowrap" onclick="switchTab('insight', this)">🎯 Sales & Customer</button>
+                <button class="tab-btn whitespace-nowrap" onclick="switchTab('factory', this)">🏭 Factory Analysis</button>
+                <button class="tab-btn whitespace-nowrap" onclick="switchTab('setup', this)">⚙️ Parameter Setup</button>
+                <button class="tab-btn whitespace-nowrap" onclick="switchTab('analysis', this)">💡 บทวิเคราะห์และแนวทาง</button>
+            </div>
+
+            <!-- TAB 1: Executive Dashboard -->
+            <div id="tab-exec" class="space-y-6">
+                <!-- Header with Summary Button -->
+                <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border-l-4 border-indigo-500">
+                    <h2 class="font-bold text-slate-800">ภาพรวมข้อมูลและการจัดการ (Executive Overview)</h2>
+                    <button onclick="showSummaryReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-sm transition">
+                        📋 สรุปรายงานผู้บริหาร
+                    </button>
+                </div>
+
+                <!-- KPI Grid -->
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500 clickable-card relative" onclick="openModal('รายการทั้งหมด', r => true)">
+                        <p class="text-xs text-slate-500 uppercase">รายการมีปัญหา</p>
+                        <h3 id="kpiTotalSkus" class="text-2xl font-bold text-slate-800">0</h3>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500 clickable-card relative" onclick="openModal('รายการทั้งหมดเรียงตามจำนวนเกิน PO', r => true)">
+                        <p class="text-xs text-slate-500 uppercase">ส่วนเกินรวม (ชิ้น)</p>
+                        <h3 id="kpiTotalExceed" class="text-2xl font-bold text-red-600">0</h3>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-rose-600 bg-rose-50 clickable-card relative" onclick="openModal('Dead Stock (>5 เดือน)', r => r.age > 5)">
+                        <p class="text-xs text-rose-600 uppercase font-semibold">Dead Stock (>5 เดือน)</p>
+                        <h3 id="kpiDeadStock" class="text-2xl font-bold text-rose-700">0</h3>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-purple-500 bg-purple-50 clickable-card relative" onclick="openModal('Human Error (ผลิตเกิน)', r => r.reason.includes('15') || r.reason.includes('17') || r.reason.includes('ผลิต'))">
+                        <p class="text-xs text-purple-600 uppercase font-semibold">Human Error</p>
+                        <h3 id="kpiHumanError" class="text-2xl font-bold text-purple-700">0</h3>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-orange-500 bg-orange-50 clickable-card relative" onclick="openModal('ข้อมูลแหว่ง', r => r.missingData)">
+                        <p class="text-xs text-orange-600 uppercase font-semibold">ข้อมูลแหว่ง (Quality)</p>
+                        <h3 id="kpiMissingData" class="text-2xl font-bold text-orange-700">0</h3>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Action Progress -->
+                    <div class="bg-white p-5 rounded-xl shadow-sm col-span-1 flex flex-col">
+                        <h4 class="font-bold text-slate-700 text-sm mb-4 text-center">ติดตามสถานะการจัดการ</h4>
+                        <div class="mb-3">
+                            <div class="flex justify-between text-xs mb-1 text-slate-600"><span>ดำเนินการแล้ว (รายการ)</span><span id="progressCaseText" class="font-bold text-green-600">0 / 0 (0%)</span></div>
+                            <div class="w-full bg-slate-100 rounded-full h-2"><div id="progressCaseBar" class="bg-green-500 h-2 rounded-full transition-all" style="width: 0%"></div></div>
+                        </div>
+                        <div class="mb-4">
+                            <div class="flex justify-between text-xs mb-1 text-slate-600"><span>ดำเนินการแล้ว (ใบ/ชิ้น)</span><span id="progressQtyText" class="font-bold text-green-600">0 / 0 (0%)</span></div>
+                            <div class="w-full bg-slate-100 rounded-full h-2"><div id="progressQtyBar" class="bg-green-500 h-2 rounded-full transition-all" style="width: 0%"></div></div>
+                        </div>
+                        <h4 class="font-semibold text-slate-600 text-xs mb-2 text-center border-t pt-4">สัดส่วนสถานะ (จำนวนใบ)</h4>
+                        <div class="donut-container flex-1"><canvas id="actionChart"></canvas></div>
+                    </div>
+                    <!-- Reason -->
+                    <div class="bg-white p-5 rounded-xl shadow-sm col-span-2">
+                        <h4 class="font-bold text-slate-700 text-sm mb-2">สัดส่วนตามสาเหตุ (ความถี่/จำนวนรายการ)</h4>
+                        <div class="chart-container"><canvas id="reasonChart"></canvas></div>
+                    </div>
+                    <!-- Aging -->
+                    <div class="bg-white p-5 rounded-xl shadow-sm lg:col-span-3">
+                        <h4 class="font-bold text-slate-700 text-sm mb-2">ช่วงอายุสต็อกส่วนเกิน (คลิกแท่งเพื่อดูข้อมูล)</h4>
+                        <div class="chart-container"><canvas id="agingChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Action Management -->
+            <div id="tab-action" class="hidden">
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-[75vh]">
+                    <div class="p-4 bg-slate-50 border-b flex justify-between items-center">
+                        <h4 class="font-bold text-slate-700 uppercase text-sm">อัปเดตสถานะการจัดการสต็อกส่วนเกิน</h4>
+                        <button onclick="exportToCSV()" class="text-xs bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">ส่งออก Excel</button>
+                    </div>
+                    <div class="overflow-y-auto flex-1 relative">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-slate-50 text-slate-600 uppercase text-xs sticky top-0 z-10 shadow-sm">
+                                <tr>
+                                    <th class="p-3 font-semibold w-40">Status (Action)</th>
+                                    <th class="p-3 font-semibold sortable" onclick="handleSort('plant')">Plant <span class="sort-icon" id="sort-plant"></span></th>
+                                    <th class="p-3 font-semibold sortable" onclick="handleSort('age')">อายุ <span class="sort-icon" id="sort-age"></span></th>
+                                    <th class="p-3 font-semibold sortable" onclick="handleSort('reason')">Reason <span class="sort-icon" id="sort-reason"></span></th>
+                                    <th class="p-3 font-semibold sortable" onclick="handleSort('item')">Item / Desc / Remarks <span class="sort-icon" id="sort-item"></span></th>
+                                    <th class="p-3 font-semibold text-right text-orange-600 sortable" onclick="handleSort('allowance')">ค่าเผื่อ <span class="sort-icon" id="sort-allowance"></span></th>
+                                    <th class="p-3 font-semibold sortable" onclick="handleSort('saleman')">Saleman <span class="sort-icon" id="sort-saleman"></span></th>
+                                    <th class="p-3 font-semibold text-right sortable text-red-600" onclick="handleSort('overPo')">เกินพีโอ <span class="sort-icon" id="sort-overPo">▼</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <div class="p-3 bg-white border-t flex justify-between items-center text-sm">
+                        <span id="pageInfo" class="text-slate-500">หน้า 1</span>
+                        <div class="flex gap-2">
+                            <button id="btnPrevPage" class="px-3 py-1 border rounded disabled:opacity-50">ก่อนหน้า</button>
+                            <button id="btnNextPage" class="px-3 py-1 border rounded disabled:opacity-50">ถัดไป</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: Sales & Customer Insights -->
+            <div id="tab-insight" class="hidden space-y-6">
+                <!-- Top Salesman Chart -->
+                <div class="bg-white p-5 rounded-xl shadow-sm">
+                    <h4 class="font-bold text-slate-700 text-sm mb-2">ภาระส่วนเกินแยกตามพนักงานขาย</h4>
+                    <div class="chart-container" style="height: 250px;"><canvas id="salesmanChart"></canvas></div>
+                </div>
+                <!-- Pivot Table -->
+                <div class="bg-white p-5 rounded-xl shadow-sm">
+                    <h4 class="font-bold text-slate-700 text-sm mb-4">ตาราง Pivot: พนักงานขาย และ ลูกค้า (เรียงตามยอดเกิน PO)</h4>
+                    <div class="overflow-x-auto border rounded-lg max-h-[500px] overflow-y-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-700 uppercase text-xs sticky top-0 shadow-sm z-10">
+                                <tr>
+                                    <th class="p-3 font-semibold">พนักงานขาย (Salesman)</th>
+                                    <th class="p-3 font-semibold">ลูกค้า (Customer)</th>
+                                    <th class="p-3 font-semibold text-right">จำนวน SKU</th>
+                                    <th class="p-3 font-semibold text-right text-red-600">ยอดเกิน PO รวม</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pivotBody" class="divide-y divide-slate-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: Factory Analysis -->
+            <div id="tab-factory" class="hidden space-y-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm">
+                    <h4 class="font-bold text-slate-700 text-sm mb-2">จำนวนเกิน PO แยกตามแพลนต์โรงงาน</h4>
+                    <div class="chart-container" style="height: 250px;"><canvas id="factoryChart"></canvas></div>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm">
+                    <h4 class="font-bold text-slate-700 text-sm mb-4">ตารางสรุปผลโรงงาน</h4>
+                    <div class="overflow-x-auto border rounded-lg">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-700 uppercase text-xs">
+                                <tr>
+                                    <th class="p-3 font-semibold">Plant (แพลนต์)</th>
+                                    <th class="p-3 font-semibold text-right">จำนวนรายการ (SKU)</th>
+                                    <th class="p-3 font-semibold text-right text-orange-600">รวมค่าเผื่อ</th>
+                                    <th class="p-3 font-semibold text-right text-red-600">รวมเกินพีโอ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="factoryTableBody" class="divide-y divide-slate-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: Parameter Setup -->
+            <div id="tab-setup" class="hidden">
+                <div class="bg-white p-6 rounded-xl shadow-sm max-w-2xl mx-auto">
+                    <h4 class="font-bold text-slate-700 text-lg mb-2">⚙️ ตั้งค่าตัวเลือก Status Action</h4>
+                    <p class="text-sm text-slate-500 mb-6">คุณสามารถเพิ่มหรือลบตัวเลือกสถานะการจัดการได้ที่นี่ การเปลี่ยนแปลงจะส่งผลกับข้อมูลใหม่และตัวเลือกในตารางทันที</p>
+                    
+                    <div class="flex gap-2 mb-6">
+                        <input type="text" id="newActionInput" class="border border-slate-300 rounded-lg px-4 py-2 flex-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="พิมพ์ชื่อสถานะใหม่...">
+                        <button onclick="addNewAction()" class="bg-blue-600 text-white font-semibold px-6 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">เพิ่ม</button>
+                    </div>
+
+                    <div class="border rounded-lg overflow-hidden">
+                        <ul id="actionSettingsList" class="divide-y divide-slate-100 bg-slate-50">
+                            <!-- Injected dynamically -->
+                        </ul>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-4">* สถานะ "รอตรวจสอบ" และ "ดำเนินการแล้ว" เป็นสถานะระบบ ไม่สามารถลบได้</p>
+                </div>
+            </div>
+
+            <!-- TAB 6: Analysis Report -->
+            <div id="tab-analysis" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-xl font-bold text-slate-800 mb-4 border-b pb-2">บทวิเคราะห์สาเหตุและแนวทางการจัดการ (Root Cause & Action Plan)</h3>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Top Causes (Dynamic) -->
+                        <div class="bg-red-50 p-5 rounded-lg border border-red-100">
+                            <h4 class="font-bold text-red-700 text-lg mb-3">⚠️ 3 สาเหตุหลักที่พบมากที่สุด (จากข้อมูลปัจจุบัน)</h4>
+                            <ul id="analysisTopReasons" class="list-disc list-inside text-sm text-slate-700 space-y-2 ml-2">
+                                <!-- Injected via JS -->
+                            </ul>
+                        </div>
+
+                        <!-- Measurement -->
+                        <div class="bg-blue-50 p-5 rounded-lg border border-blue-100">
+                            <h4 class="font-bold text-blue-700 text-lg mb-3">📈 การวัดผลความสำเร็จ (KPIs)</h4>
+                            <ul class="list-disc list-inside text-sm text-slate-700 space-y-2 ml-2">
+                                <li><b>ลดปริมาณ Dead Stock:</b> สินค้าอายุ > 5 เดือน ต้องลดลง 50% ภายในไตรมาส</li>
+                                <li><b>Action Progress:</b> ต้องมีการระบุ Status Action ครบ 100% ภายใน 7 วัน</li>
+                                <li><b>ลด Severity:</b> สินค้าที่มีอัตราส่วนเกิน PO สูง ต้องถูกลดระดับความรุนแรง</li>
+                                <li><b>Human Error Rate:</b> สาเหตุจากการผลิตเกิน/ผิดพลาด ต้องลดลง 20% ในเดือนถัดไป</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                        <!-- Corrective -->
+                        <div class="border border-slate-200 p-5 rounded-lg">
+                            <h4 class="font-bold text-slate-700 text-lg mb-3">🛠️ แนวทางแก้ไขปัญหาเฉพาะหน้า (Corrective Action)</h4>
+                            <div class="space-y-3 text-sm text-slate-600">
+                                <p><b>1. กลุ่มรอเคลียร์ตัวเลข/ข้อมูลแหว่ง:</b> ประสานงานฝ่ายวางแผน (Planning) และคลังสินค้าเพื่ออัปเดตข้อมูลให้ครบถ้วนภายใน 3 วัน</p>
+                                <p><b>2. กลุ่มผลิตเกิน / Overlot:</b> จัดทำรายการสินค้าเสนอเซลส์ (Sales) เพื่อทำโปรโมชั่นขายพ่วง หรือขายลดราคา (Clearance)</p>
+                                <p><b>3. กลุ่มสินค้ามีปัญหาคุณภาพ:</b> ส่งคืนฝ่ายผลิตเพื่อ Rework หรือคัดแยกทำลาย (Scrap) เพื่อตัดยอดออกจากระบบ</p>
+                                <p><b>4. ลูกค้าไม่รับสินค้า:</b> เซลส์เจรจากับลูกค้า เพื่อให้รับสินค้า หรือหาลูกค้ารายอื่นที่ใช้สินค้าสเปคใกล้เคียงกัน</p>
+                            </div>
+                        </div>
+
+                        <!-- Preventive -->
+                        <div class="border border-slate-200 p-5 rounded-lg">
+                            <h4 class="font-bold text-slate-700 text-lg mb-3">🛡️ แนวทางป้องกันระยะยาว (Preventive Action)</h4>
+                            <div class="space-y-3 text-sm text-slate-600">
+                                <p><b>1. ทบทวนค่าเผื่อ (Allowance):</b> วิเคราะห์และปรับลด % ค่าเผื่อการผลิตในสูตรการผลิต (BOM) สำหรับสินค้าที่มีประวัติผลิตเกินซ้ำซาก</p>
+                                <p><b>2. ปรับปรุงกระบวนการผลิต:</b> ลดความสูญเสียและลดความจำเป็นในการเผื่อยอดผลิต (แก้ปัญหา Human Error / ประสิทธิภาพเครื่องจักร)</p>
+                                <p><b>3. ควบคุมขั้นต่ำการผลิต (MOQ):</b> หากยอดสั่งซื้อน้อยกว่า MOQ มากๆ ต้องแจ้งเซลส์ให้ตกลงกับลูกค้าก่อนผลิต เพื่อป้องกันเศษสต็อกคงค้าง</p>
+                                <p><b>4. ระบบแจ้งเตือน (Alerts):</b> ตั้งระบบเตือนเมื่อสต็อก Over PO อายุครบ 3 เดือน เพื่อรีบดำเนินการก่อนกลายเป็น Dead Stock (>5 เดือน)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Register ChartDataLabels plugin
+        Chart.register(ChartDataLabels);
+        Chart.defaults.set('plugins.datalabels', {
+            color: '#475569',
+            anchor: 'end',
+            align: 'right',
+            formatter: Math.round,
+            font: { weight: 'bold', size: 10 }
+        });
+
+        let allFilteredData = []; 
+        let activeData = [];      
+        let actionStates = {}; 
+        let charts = {};
+        
+        const state = {
+            search: '', plant: 'all', saleman: 'all', customer: 'all', 
+            ageMin: 0, ageMax: 120,
+            page: 1, limit: 30, sortBy: 'overPo', sortAsc: false
+        };
+
+        const headerKeywords = {
+            overPo: ['เกินพีโอ', 'over po', 'เกิน po'],
+            stock: ['สต็อก', 'stock', 'total stock'],
+            reason: ['reason', 'สาเหตุ', 'ที่มา'],
+            latestProduce: ['ผลิตล่าสุด', 'last produce', 'mfg'],
+            age: ['อายุ', 'age'],
+            item: ['item', 'รหัสสินค้า', 'sku'],
+            desc: ['description', 'รายละเอียด'],
+            saleman: ['saleman', 'พนักงานขาย'],
+            customer: ['customer', 'ลูกค้า'],
+            plant: ['plant', 'แพลนต์', 'สาขา'],
+            allowance: ['ค่าเผื่อ', 'allowance'],
+            planRemark: ['planning remarks', 'planning remark', 'remark', 'หมายเหตุวางแผน']
+        };
+
+        const DEFAULT_ACTIONS = ["รอตรวจสอบ", "รอเคลียร์ตัวเลข", "รอ Rework", "รอส่งคืน", "รอทำลาย", "รอขายลดราคา", "ดำเนินการแล้ว"];
+        const CORE_ACTIONS = ["รอตรวจสอบ", "ดำเนินการแล้ว"]; // สถานะที่ห้ามลบ
+        let ACTION_OPTIONS = [...DEFAULT_ACTIONS];
+
+        function getActionColor(actionStr) {
+            const predefined = { "รอตรวจสอบ": "#94a3b8", "รอเคลียร์ตัวเลข": "#8b5cf6", "รอ Rework": "#f59e0b", "รอส่งคืน": "#f97316", "รอทำลาย": "#ef4444", "รอขายลดราคา": "#3b82f6", "ดำเนินการแล้ว": "#10b981" };
+            // ถ้าเป็น status ที่เพิ่มมาใหม่ สุ่มสีโทนเทาเข้ม
+            return predefined[actionStr] || "#475569";
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+
+            document.getElementById('btnClearData')?.addEventListener('click', async () => {
+                if(confirm('ล้างข้อมูลปัจจุบันและอัปโหลดไฟล์ใหม่?')) { 
+                    await localforage.clear(); 
+                    location.reload(); 
+                }
+            });
+
+            dropZone?.addEventListener('click', () => fileInput?.click());
+            dropZone?.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
+            dropZone?.addEventListener('dragleave', () => dropZone.classList.remove('active'));
+            dropZone?.addEventListener('drop', (e) => { 
+                e.preventDefault(); 
+                dropZone.classList.remove('active'); 
+                if(e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]); 
+            });
+            fileInput?.addEventListener('change', (e) => { 
+                if(e.target.files.length > 0) handleFile(e.target.files[0]); 
+            });
+
+            document.getElementById('filterSearch')?.addEventListener('input', (e) => { state.search = e.target.value.toLowerCase(); state.page = 1; updateDashboard(); });
+            document.getElementById('filterPlant')?.addEventListener('change', (e) => { state.plant = e.target.value; state.page = 1; updateDashboard(); });
+            document.getElementById('filterSaleman')?.addEventListener('change', (e) => { state.saleman = e.target.value; state.page = 1; updateDashboard(); });
+            document.getElementById('filterCustomer')?.addEventListener('change', (e) => { state.customer = e.target.value; state.page = 1; updateDashboard(); });
+            document.getElementById('filterAgeMin')?.addEventListener('input', syncAgeFilter);
+            document.getElementById('filterAgeMax')?.addEventListener('input', syncAgeFilter);
+            
+            document.getElementById('btnResetFilters')?.addEventListener('click', () => {
+                state.search = ''; state.plant = 'all'; state.saleman = 'all'; state.customer = 'all'; 
+                state.ageMin = 0; state.ageMax = parseInt(document.getElementById('filterAgeMax').max); state.page = 1;
+                document.getElementById('filterSearch').value = ''; 
+                document.getElementById('filterPlant').value = 'all';
+                document.getElementById('filterSaleman').value = 'all'; 
+                document.getElementById('filterCustomer').value = 'all';
+                document.getElementById('filterAgeMin').value = 0;
+                document.getElementById('filterAgeMax').value = state.ageMax;
+                document.getElementById('ageLabel').textContent = `0 - ${state.ageMax} ด.`;
+                updateDashboard();
+            });
+
+            document.getElementById('btnPrevPage')?.addEventListener('click', () => { if(state.page > 1) { state.page--; renderTable(); }});
+            document.getElementById('btnNextPage')?.addEventListener('click', () => { 
+                if(state.page < Math.ceil(activeData.length / state.limit)) { state.page++; renderTable(); }
+            });
+
+            initApp();
+        });
+
+        async function initApp() {
+            try {
+                const savedOps = await localforage.getItem('customActionOptions');
+                if (savedOps && savedOps.length > 0) {
+                    ACTION_OPTIONS = savedOps;
+                } else {
+                    ACTION_OPTIONS = [...DEFAULT_ACTIONS];
+                }
+                renderSetupList();
+
+                const savedData = await localforage.getItem('inventoryData');
+                const savedActions = await localforage.getItem('inventoryActions');
+                if (savedData) {
+                    allFilteredData = savedData;
+                    if (savedActions) actionStates = savedActions;
+                    setupDashboard();
+                }
+            } catch (e) { 
+                localforage.removeItem('inventoryData'); 
+            }
+        }
+
+        /* --- Parameter Setup Functions --- */
+        function renderSetupList() {
+            const list = document.getElementById('actionSettingsList');
+            if(!list) return;
+            list.innerHTML = '';
+            ACTION_OPTIONS.forEach(opt => {
+                const isCore = CORE_ACTIONS.includes(opt);
+                list.insertAdjacentHTML('beforeend', `
+                    <li class="p-3 flex justify-between items-center hover:bg-white transition">
+                        <div class="flex items-center gap-3">
+                            <span class="w-3 h-3 rounded-full" style="background-color: ${getActionColor(opt)}"></span>
+                            <span class="text-slate-700 font-medium">${opt}</span>
+                        </div>
+                        ${isCore ? '<span class="text-xs text-slate-400 font-semibold bg-slate-100 px-2 py-1 rounded">ระบบ</span>' : `<button onclick="removeActionOption('${opt}')" class="text-red-500 hover:text-red-700 text-sm font-bold px-3 py-1 bg-red-50 rounded hover:bg-red-100 transition">ลบ</button>`}
+                    </li>
+                `);
+            });
+        }
+
+        window.addNewAction = async function() {
+            const input = document.getElementById('newActionInput');
+            const val = input.value.trim();
+            if(!val) return;
+            if(ACTION_OPTIONS.includes(val)) return alert('มีสถานะนี้อยู่แล้ว');
+            
+            ACTION_OPTIONS.push(val);
+            await localforage.setItem('customActionOptions', ACTION_OPTIONS);
+            input.value = '';
+            renderSetupList();
+            if(allFilteredData && allFilteredData.length > 0) renderTable();
+        };
+
+        window.removeActionOption = async function(val) {
+            if(CORE_ACTIONS.includes(val)) return alert('ไม่สามารถลบสถานะระบบได้');
+            if(!confirm(`ต้องการลบสถานะ "${val}" หรือไม่?\n\n* ข้อมูลเดิมที่ถูกตั้งสถานะนี้ไว้ จะถูกเปลี่ยนกลับเป็น "รอตรวจสอบ"`)) return;
+            
+            ACTION_OPTIONS = ACTION_OPTIONS.filter(o => o !== val);
+            
+            // Revert deleted status to default
+            if (actionStates) {
+                let hasChanges = false;
+                for (let key in actionStates) {
+                    if (actionStates[key] === val) {
+                        actionStates[key] = "รอตรวจสอบ";
+                        hasChanges = true;
+                    }
+                }
+                if (hasChanges) {
+                    await localforage.setItem('inventoryActions', actionStates);
+                }
+            }
+
+            await localforage.setItem('customActionOptions', ACTION_OPTIONS);
+            renderSetupList();
+            if(allFilteredData && allFilteredData.length > 0) {
+                updateDashboard(); // full refresh to fix donut & table
+            }
+        };
+        /* --------------------------------- */
+
+        /* --- Summary Report --- */
+        window.showSummaryReport = function() {
+            if(activeData.length === 0) return alert('ไม่มีข้อมูลสำหรับสร้างรายงาน');
+            
+            const totalSkus = activeData.length;
+            const totalQty = activeData.reduce((sum, r) => sum + r.overPo, 0);
+            const deadStock = activeData.filter(r => r.age > 5).length;
+            const deadStockQty = activeData.filter(r => r.age > 5).reduce((sum, r) => sum + r.overPo, 0);
+            
+            let reasonMap = {};
+            let doneCases = 0;
+            let doneQty = 0;
+            
+            activeData.forEach(r => {
+                reasonMap[r.reason] = (reasonMap[r.reason] || 0) + 1;
+                let st = actionStates[r._id] || "รอตรวจสอบ";
+                if(st === "ดำเนินการแล้ว") { doneCases++; doneQty += r.overPo; }
+            });
+            
+            let topReasons = Object.entries(reasonMap).sort((a,b) => b[1] - a[1]).slice(0, 3);
+            let topReasonsText = topReasons.map((r, i) => `  ${i+1}. ${r[0]} (${r[1].toLocaleString()} รายการ)`).join('\n');
+            
+            let casePct = totalSkus ? Math.round((doneCases/totalSkus)*100) : 0;
+            
+            const today = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+            
+            const reportText = `📊 สรุปรายงานการจัดการสต็อกส่วนเกิน (Over PO)
+ประจำวันที่: ${today}
+
+[ภาพรวมปัญหา]
+- รายการที่มีปัญหาทั้งหมด: ${totalSkus.toLocaleString()} รายการ
+- จำนวนสินค้าส่วนเกินรวม: ${totalQty.toLocaleString()} ชิ้น
+- กลุ่ม Dead Stock (>5 เดือน): ${deadStock.toLocaleString()} รายการ (${deadStockQty.toLocaleString()} ชิ้น)
+
+[3 สาเหตุหลักที่พบมากที่สุด]
+${topReasonsText}
+
+[ความคืบหน้าการจัดการ]
+- ดำเนินการแก้ไขแล้ว: ${doneCases.toLocaleString()} รายการ (คิดเป็น ${casePct}%)
+- จำนวนชิ้นที่เคลียร์แล้ว: ${doneQty.toLocaleString()} ชิ้น
+- รอตรวจสอบ/รอดำเนินการ: ${(totalSkus - doneCases).toLocaleString()} รายการ
+
+[แผนการดำเนินงานต่อไป]
+1. เร่งระบายกลุ่ม Dead Stock ที่มีอายุเกิน 5 เดือน
+2. ติดตามพนักงานขายเพื่อหาข้อสรุปในรายการที่รอเคลียร์
+3. ตรวจสอบสาเหตุร่วมกับฝ่ายผลิตเพื่อลดอัตราการผลิตเกิน`;
+
+            document.getElementById('summaryTextarea').value = reportText;
+            document.getElementById('summaryModal').classList.remove('hidden');
+        };
+
+        window.copySummaryReport = function() {
+            const textarea = document.getElementById('summaryTextarea');
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // For mobile devices
+            try {
+                document.execCommand('copy');
+                alert('คัดลอกรายงานเรียบร้อยแล้ว สามารถนำไปวางได้เลยครับ');
+            } catch (err) {
+                alert('ไม่สามารถคัดลอกได้ กรุณากดคัดลอกด้วยตนเอง');
+            }
+        };
+        /* --------------------------------- */
+
+        const syncAgeFilter = () => {
+            let min = parseInt(document.getElementById('filterAgeMin').value);
+            let max = parseInt(document.getElementById('filterAgeMax').value);
+            if(min > max) { let tmp = min; min = max; max = tmp; }
+            state.ageMin = min; state.ageMax = max;
+            document.getElementById('ageLabel').textContent = `${min} - ${max} ด.`;
+            state.page = 1; updateDashboard();
+        };
+
+        function switchTab(tabId, btn) {
+            ['exec', 'action', 'insight', 'factory', 'setup', 'analysis'].forEach(id => document.getElementById(`tab-${id}`)?.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`)?.classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if(tabId === 'action') renderTable();
+        }
+
+        window.closeModal = function(modalId) { 
+            document.getElementById(modalId)?.classList.add('hidden'); 
+        };
+        
+        function openModal(title, filterFn) {
+            document.getElementById('modalTitle').textContent = `รายละเอียด: ${title}`;
+            const modalBody = document.getElementById('modalTableBody');
+            modalBody.innerHTML = '';
+            
+            let filtered = activeData.filter(filterFn).sort((a,b) => b.overPo - a.overPo);
+            if(filtered.length === 0) {
+                modalBody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-slate-500">ไม่มีข้อมูล</td></tr>';
+            } else {
+                filtered.slice(0, 500).forEach(row => {
+                    const status = actionStates[row._id] || "รอตรวจสอบ";
+                    const sColor = getActionColor(status);
+                    modalBody.insertAdjacentHTML('beforeend', `
+                        <tr class="hover:bg-blue-50">
+                            <td class="p-2">${row.plant}</td>
+                            <td class="p-2 max-w-[250px]">
+                                <div class="font-bold truncate" title="${row.item}">${row.item}</div>
+                                <div class="text-xs text-slate-500 truncate" title="${row.desc}">${row.desc}</div>
+                                ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-600 truncate mt-0.5" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
+                            </td>
+                            <td class="p-2 text-xs truncate max-w-[100px]">${row.reason}</td>
+                            <td class="p-2 text-xs">${row.saleman}</td>
+                            <td class="p-2 text-right">${row.age}</td>
+                            <td class="p-2 text-right text-orange-600">${row.allowance.toLocaleString()}</td>
+                            <td class="p-2 text-right text-red-600 font-bold">${row.overPo.toLocaleString()}</td>
+                            <td class="p-2 text-xs" style="color:${sColor}; font-weight:bold;">${status}</td>
+                        </tr>
+                    `);
+                });
+            }
+            document.getElementById('dataModal')?.classList.remove('hidden');
+        }
+
+        function parseNum(val) { return parseFloat(String(val).replace(/,/g, '')) || 0; }
+
+        function calculateAgeMonths(dateStr, ageFallback) {
+            let fallbackMonths = Math.ceil((parseNum(ageFallback) || 0) / 30);
+            if (!dateStr) return fallbackMonths || 1;
+            let str = String(dateStr).trim();
+            let parts = str.split(/[\/\-\s]/);
+            let d;
+            if (parts.length >= 3) {
+                let y = parseInt(parts[0]), m = parseInt(parts[1]), day = parseInt(parts[2]);
+                if (str.match(/^\d{4}/)) { d = new Date(y, m - 1, day); } 
+                else { 
+                    y = parseInt(parts[2]); m = parseInt(parts[1]); day = parseInt(parts[0]);
+                    if (y > 2500) y -= 543; else if (y < 100) y += 2000;
+                    d = new Date(y, m - 1, day);
+                }
+            } else { d = new Date(str); }
+            if (isNaN(d.getTime())) return fallbackMonths || 1;
+            let months = Math.ceil(((new Date() - d) / (1000 * 60 * 60 * 24)) / 30);
+            return isNaN(months) || months < 1 ? 1 : months;
+        }
+
+        function showLoading(percent, text) {
+            document.getElementById('loadingOverlay')?.classList.remove('hidden');
+            document.getElementById('progressBar').style.width = `${percent}%`;
+            document.getElementById('loadingText').textContent = text;
+        }
+
+        function hideLoading() { document.getElementById('loadingOverlay')?.classList.add('hidden'); }
+
+        window.handleFile = function(file) {
+            if (!file || !file.name.endsWith('.csv')) return alert('อัปโหลดไฟล์ CSV เท่านั้น');
+            showLoading(20, 'กำลังอ่านไฟล์...');
+            let parsedData = [];
+            Papa.parse(file, {
+                header: true, skipEmptyLines: true, worker: true,
+                chunk: (results) => parsedData.push(...results.data),
+                complete: () => setTimeout(() => processData(parsedData), 100),
+                error: (err) => { hideLoading(); alert('Error: ' + err.message); }
+            });
+        };
+
+        function findActualHeader(row, keywords) {
+            for (let key of Object.keys(row)) if (keywords.some(kw => String(key).toLowerCase().includes(kw))) return key;
+            return null;
+        }
+
+        function processData(rawData) {
+            if (rawData.length === 0) { hideLoading(); return alert('ไฟล์ว่างเปล่า'); }
+            const sr = rawData[0];
+            const map = {
+                overPo: findActualHeader(sr, headerKeywords.overPo), stock: findActualHeader(sr, headerKeywords.stock),
+                reason: findActualHeader(sr, headerKeywords.reason), latestProduce: findActualHeader(sr, headerKeywords.latestProduce),
+                age: findActualHeader(sr, headerKeywords.age), item: findActualHeader(sr, headerKeywords.item),
+                desc: findActualHeader(sr, headerKeywords.desc), saleman: findActualHeader(sr, headerKeywords.saleman),
+                customer: findActualHeader(sr, headerKeywords.customer), plant: findActualHeader(sr, headerKeywords.plant),
+                allowance: findActualHeader(sr, headerKeywords.allowance), planRemark: findActualHeader(sr, headerKeywords.planRemark)
+            };
+
+            if (!map.overPo) { hideLoading(); return alert('ไม่พบคอลัมน์ "เกินพีโอ"'); }
+
+            showLoading(70, 'วิเคราะห์ข้อมูล...');
+            setTimeout(async () => {
+                let processed = [];
+                let maxAgeFound = 0;
+                rawData.forEach((row, i) => {
+                    const overVal = parseNum(row[map.overPo]);
+                    if (overVal > 0) {
+                        const reasonRaw = map.reason && row[map.reason] ? String(row[map.reason]).trim() : '';
+                        const rawDate = map.latestProduce ? row[map.latestProduce] : null;
+                        const ageMonths = calculateAgeMonths(rawDate, row[map.age]);
+                        if(ageMonths > maxAgeFound) maxAgeFound = ageMonths;
+                        
+                        let finalReason = reasonRaw;
+                        if (!finalReason || finalReason === '-' || finalReason === '') {
+                            finalReason = 'รอข้อมูลวางแผน';
+                        }
+                        
+                        processed.push({
+                            _id: `row_${i}_${row[map.item] || 'u'}`, 
+                            overPo: overVal,
+                            reason: finalReason, age: ageMonths,
+                            item: row[map.item] || '-', desc: row[map.desc] || '-',
+                            saleman: row[map.saleman] || '-', customer: row[map.customer] || '-',
+                            plant: map.plant && row[map.plant] ? row[map.plant] : '-',
+                            allowance: map.allowance ? parseNum(row[map.allowance]) : 0,
+                            planRemark: map.planRemark && row[map.planRemark] ? String(row[map.planRemark]).trim() : '-',
+                            missingData: (!rawDate || !reasonRaw || reasonRaw === '-')
+                        });
+                    }
+                });
+
+                allFilteredData = processed;
+                
+                const safeMaxAge = Math.min(240, maxAgeFound || 120); 
+                document.getElementById('filterAgeMax').max = safeMaxAge;
+                document.getElementById('filterAgeMin').max = safeMaxAge;
+                document.getElementById('filterAgeMax').value = safeMaxAge;
+                state.ageMax = safeMaxAge;
+                document.getElementById('ageLabel').textContent = `0 - ${safeMaxAge} ด.`;
+
+                try { await localforage.setItem('inventoryData', allFilteredData); } catch (e) {}
+                
+                showLoading(100, 'สร้างแดชบอร์ด...');
+                setTimeout(() => { setupDashboard(); hideLoading(); }, 200);
+            }, 100);
+        }
+
+        function setupDashboard() {
+            document.getElementById('uploadSection')?.classList.add('hidden');
+            document.getElementById('resultsSection')?.classList.remove('hidden');
+            document.getElementById('btnClearData')?.classList.remove('hidden');
+
+            const plants = [...new Set(allFilteredData.map(d => d.plant).filter(p => p !== '-'))].sort();
+            const salemen = [...new Set(allFilteredData.map(d => d.saleman).filter(s => s !== '-'))].sort();
+            const customers = [...new Set(allFilteredData.map(d => d.customer).filter(c => c !== '-'))].sort();
+            
+            document.getElementById('filterPlant').innerHTML = '<option value="all">ทั้งหมด</option>' + plants.map(p => `<option value="${p}">${p}</option>`).join('');
+            document.getElementById('filterSaleman').innerHTML = '<option value="all">ทั้งหมด</option>' + salemen.map(s => `<option value="${s}">${s}</option>`).join('');
+            document.getElementById('filterCustomer').innerHTML = '<option value="all">ทั้งหมด</option>' + customers.map(c => `<option value="${c}">${c}</option>`).join('');
+
+            updateDashboard();
+        }
+
+        function updateDashboard() {
+            activeData = allFilteredData.filter(row => {
+                const searchStr = `${row.item} ${row.desc} ${row.planRemark}`.toLowerCase();
+                const mSearch = !state.search || searchStr.includes(state.search);
+                const mPlant = state.plant === 'all' || String(row.plant) === state.plant;
+                const mSaleman = state.saleman === 'all' || String(row.saleman) === state.saleman;
+                const mCustomer = state.customer === 'all' || String(row.customer) === state.customer;
+                const mAge = row.age >= state.ageMin && row.age <= state.ageMax;
+                return mSearch && mPlant && mSaleman && mCustomer && mAge;
+            });
+
+            let reasonMap = {}, salesmanMap = {};
+            
+            // ปรับ Bucket Aging เป็น 1-12 เดือน และ 1 ปีขึ้นไป
+            let ageBuckets = { 
+                '1 เดือน': 0, '2 เดือน': 0, '3 เดือน': 0, '4 เดือน': 0, 
+                '5 เดือน': 0, '6 เดือน': 0, '7 เดือน': 0, '8 เดือน': 0, 
+                '9 เดือน': 0, '10 เดือน': 0, '11 เดือน': 0, '12 เดือน': 0, 
+                '> 1 ปี': 0 
+            };
+            
+            let actionCounts = {};
+            ACTION_OPTIONS.forEach(o => actionCounts[o] = 0);
+            let totalExceed = 0, humanError = 0, deadStock = 0, missingCount = 0;
+
+            activeData.forEach(row => {
+                totalExceed += row.overPo;
+                let rStr = String(row.reason);
+                if (rStr.includes('15') || rStr.includes('17') || rStr.includes('ผลิต')) humanError += row.overPo;
+                if (row.age > 5) deadStock++;
+                if (row.missingData) missingCount++;
+
+                reasonMap[row.reason] = (reasonMap[row.reason] || 0) + 1; // นับเป็นความถี่
+                salesmanMap[row.saleman] = (salesmanMap[row.saleman] || 0) + row.overPo;
+
+                // จัดกลุ่มอายุแบบ 1-12 และ > 1 ปี
+                if (row.age <= 1) ageBuckets['1 เดือน'] += row.overPo;
+                else if (row.age >= 12) {
+                    if (row.age === 12) ageBuckets['12 เดือน'] += row.overPo;
+                    else ageBuckets['> 1 ปี'] += row.overPo;
+                } else {
+                    ageBuckets[`${row.age} เดือน`] += row.overPo;
+                }
+
+                let st = actionStates[row._id] || "รอตรวจสอบ";
+                // ใช้ actionStates ถ้าไม่อยู่ใน OPTIONS ปัจจุบัน ให้จัดเป็นรอตรวจสอบชั่วคราว
+                if (!ACTION_OPTIONS.includes(st)) st = "รอตรวจสอบ";
+                actionCounts[st] = (actionCounts[st] || 0) + row.overPo; 
+            });
+
+            document.getElementById('kpiTotalSkus').textContent = activeData.length.toLocaleString();
+            document.getElementById('kpiTotalExceed').textContent = totalExceed.toLocaleString();
+            document.getElementById('kpiDeadStock').textContent = deadStock.toLocaleString();
+            document.getElementById('kpiHumanError').textContent = humanError.toLocaleString();
+            document.getElementById('kpiMissingData').textContent = missingCount.toLocaleString();
+
+            updateProgressUI();
+            updateCharts(reasonMap, ageBuckets, salesmanMap, actionCounts);
+            renderPivotTable();
+            renderFactoryTab();
+            renderAnalysisTab(reasonMap);
+            renderTable();
+        }
+
+        function renderAnalysisTab(reasonMap) {
+            let sortedR = Object.entries(reasonMap).sort((a,b) => b[1] - a[1]).slice(0, 3);
+            const ul = document.getElementById('analysisTopReasons');
+            if (!ul) return;
+            ul.innerHTML = '';
+            if (sortedR.length === 0) {
+                ul.innerHTML = '<li>ไม่มีข้อมูลสาเหตุในขณะนี้</li>';
+                return;
+            }
+            sortedR.forEach((r, i) => {
+                ul.insertAdjacentHTML('beforeend', `<li><b>อันดับ ${i+1}:</b> ${r[0]} <span class="text-slate-500">(${r[1].toLocaleString()} รายการ)</span></li>`);
+            });
+        }
+
+        function updateProgressUI() {
+            let totalCases = activeData.length;
+            let doneCases = 0;
+            let totalQty = 0;
+            let doneQty = 0;
+
+            activeData.forEach(row => {
+                totalQty += row.overPo;
+                let st = actionStates[row._id] || "รอตรวจสอบ";
+                if(st === "ดำเนินการแล้ว") {
+                    doneCases++;
+                    doneQty += row.overPo;
+                }
+            });
+
+            let casePct = totalCases ? Math.round((doneCases/totalCases)*100) : 0;
+            let qtyPct = totalQty ? Math.round((doneQty/totalQty)*100) : 0;
+
+            document.getElementById('progressCaseText').textContent = `${doneCases.toLocaleString()} / ${totalCases.toLocaleString()} (${casePct}%)`;
+            document.getElementById('progressCaseBar').style.width = `${casePct}%`;
+
+            document.getElementById('progressQtyText').textContent = `${doneQty.toLocaleString()} / ${totalQty.toLocaleString()} (${qtyPct}%)`;
+            document.getElementById('progressQtyBar').style.width = `${qtyPct}%`;
+        }
+
+        function updateCharts(reasonMap, ageBuckets, salesmanMap, actionCounts) {
+            ['reason', 'aging', 'salesman', 'action'].forEach(c => { if (charts[c]) charts[c].destroy(); });
+            const tf = { callbacks: { label: (ctx) => ' ' + ctx.raw.toLocaleString() + ' ชิ้น' } };
+            const tfAction = { callbacks: { label: (ctx) => ' ' + ctx.raw.toLocaleString() + ' ใบ' } };
+            const tfReason = { callbacks: { label: (ctx) => ' ' + ctx.raw.toLocaleString() + ' รายการ' } };
+
+            // DataLabels plugins disable mostly for global, enable only where needed
+            Chart.defaults.set('plugins.datalabels', { display: false });
+
+            // 1. Action Progress (Donut)
+            const actLabels = Object.keys(actionCounts).filter(k => actionCounts[k] > 0);
+            const actData = actLabels.map(k => actionCounts[k]);
+            const actColors = actLabels.map(k => getActionColor(k));
+            charts.action = new Chart(document.getElementById('actionChart'), {
+                type: 'doughnut',
+                data: { labels: actLabels, datasets: [{ data: actData, backgroundColor: actColors, borderWidth: 1 }] },
+                options: { 
+                    responsive: true, maintainAspectRatio: false, cutout: '60%', 
+                    plugins: { 
+                        legend: { position: 'bottom', labels:{boxWidth:12, font:{size:10}} }, 
+                        tooltip: tfAction,
+                        datalabels: { display: false } // No labels inside donut to prevent mess
+                    } 
+                }
+            });
+
+            // 2. Reason (Bar) - Top 15 + Other
+            let sortedR = Object.entries(reasonMap).sort((a,b) => b[1] - a[1]);
+            let topR = sortedR.slice(0, 15);
+            if(sortedR.length > 15) topR.push(['อื่นๆ', sortedR.slice(15).reduce((s, i) => s + i[1], 0)]);
+            charts.reason = new Chart(document.getElementById('reasonChart'), {
+                type: 'bar',
+                data: { labels: topR.map(r => r[0]), datasets: [{ data: topR.map(r => r[1]), backgroundColor: '#3b82f6', borderRadius: 4 }] },
+                options: { 
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false, 
+                    layout: { padding: { right: 50 } }, // Make space for labels
+                    scales: { y: { ticks: { autoSkip: false, font: { size: 10 } } } }, // FIX: Shows all labels
+                    plugins: { 
+                        legend: { display: false }, tooltip: tfReason,
+                        datalabels: { display: true, color: '#475569', anchor: 'end', align: 'right', formatter: Math.round }
+                    }, 
+                    onClick: (e, els) => { if(els.length && topR[els[0].index][0] !== 'อื่นๆ') openModal('สาเหตุ: '+topR[els[0].index][0], r => r.reason === topR[els[0].index][0]); }
+                }
+            });
+
+            // 3. Aging (Bar) 1-12 Months
+            charts.aging = new Chart(document.getElementById('agingChart'), {
+                type: 'bar',
+                data: { labels: Object.keys(ageBuckets), datasets: [{ data: Object.values(ageBuckets), backgroundColor: ['#10b981','#10b981','#facc15','#f59e0b','#f97316','#ef4444','#ef4444','#ef4444','#ef4444','#b91c1c','#b91c1c','#b91c1c','#7f1d1d'], borderRadius: 4 }] },
+                options: { 
+                    responsive: true, maintainAspectRatio: false, 
+                    layout: { padding: { top: 20 } },
+                    scales: { x: { ticks: { font: { size: 10 } } } },
+                    plugins: { 
+                        legend: { display: false }, tooltip: tf,
+                        datalabels: { display: true, color: '#475569', anchor: 'end', align: 'top', formatter: (val) => val > 0 ? val.toLocaleString() : '', font: { size: 9 } }
+                    },
+                    onClick: (e, els) => {
+                        if(els.length) {
+                            let label = Object.keys(ageBuckets)[els[0].index];
+                            let filterFn = r => true;
+                            if(label === '1 เดือน') filterFn = r => r.age <= 1;
+                            else if(label === '> 1 ปี') filterFn = r => r.age > 12;
+                            else filterFn = r => r.age === parseInt(label);
+                            openModal('อายุสต็อก: '+label, filterFn);
+                        }
+                    }
+                }
+            });
+
+            // 4. Salesman (Bar)
+            let topS = Object.entries(salesmanMap).sort((a,b) => b[1] - a[1]).slice(0, 10);
+            charts.salesman = new Chart(document.getElementById('salesmanChart'), {
+                type: 'bar',
+                data: { labels: topS.map(s => s[0]), datasets: [{ data: topS.map(s => s[1]), backgroundColor: '#8b5cf6', borderRadius: 4 }] },
+                options: { 
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false, 
+                    layout: { padding: { right: 50 } },
+                    plugins: { 
+                        legend: { display: false }, tooltip: tf,
+                        datalabels: { display: true, color: '#475569', anchor: 'end', align: 'right', formatter: (val) => val.toLocaleString() }
+                    },
+                    onClick: (e, els) => { if(els.length) openModal('พนักงานขาย: '+topS[els[0].index][0], r => r.saleman === topS[els[0].index][0]); }
+                }
+            });
+        }
+
+        function renderPivotTable() {
+            let pivot = {};
+            activeData.forEach(row => {
+                if(!pivot[row.saleman]) pivot[row.saleman] = { totalOver: 0, customers: {} };
+                pivot[row.saleman].totalOver += row.overPo;
+                
+                if(!pivot[row.saleman].customers[row.customer]) pivot[row.saleman].customers[row.customer] = { count: 0, overPo: 0 };
+                pivot[row.saleman].customers[row.customer].count += 1;
+                pivot[row.saleman].customers[row.customer].overPo += row.overPo;
+            });
+
+            let sortedSalesmen = Object.entries(pivot).sort((a, b) => b[1].totalOver - a[1].totalOver);
+            const tbody = document.getElementById('pivotBody');
+            tbody.innerHTML = '';
+            
+            sortedSalesmen.forEach(([saleman, data]) => {
+                tbody.insertAdjacentHTML('beforeend', `
+                    <tr class="bg-slate-50 border-t-2 border-slate-200">
+                        <td class="p-3 font-bold text-slate-800" colspan="2">💼 ${saleman}</td>
+                        <td class="p-3 font-bold text-right text-slate-600">-</td>
+                        <td class="p-3 font-bold text-right text-red-600">${data.totalOver.toLocaleString()}</td>
+                    </tr>
+                `);
+                
+                let sortedCust = Object.entries(data.customers).sort((a, b) => b[1].overPo - a[1].overPo);
+                sortedCust.forEach(([cust, cData]) => {
+                    tbody.insertAdjacentHTML('beforeend', `
+                        <tr class="hover:bg-blue-50 transition cursor-pointer" onclick="openModal('ลูกค้า: ${cust}', r => r.customer === '${cust}' && r.saleman === '${saleman}')">
+                            <td class="p-2 border-l-4 border-transparent"></td>
+                            <td class="p-2 text-slate-700">🏢 ${cust}</td>
+                            <td class="p-2 text-right text-slate-500">${cData.count.toLocaleString()}</td>
+                            <td class="p-2 text-right font-semibold text-rose-500">${cData.overPo.toLocaleString()}</td>
+                        </tr>
+                    `);
+                });
+            });
+        }
+
+        function renderFactoryTab() {
+            let plantMap = {};
+            activeData.forEach(r => {
+                let p = r.plant || 'Unknown';
+                if(!plantMap[p]) plantMap[p] = { overPo: 0, count: 0, allowance: 0 };
+                plantMap[p].overPo += r.overPo;
+                plantMap[p].count += 1;
+                plantMap[p].allowance += r.allowance;
+            });
+
+            let sortedPlants = Object.entries(plantMap).sort((a,b) => b[1].overPo - a[1].overPo);
+
+            // Chart
+            if(charts.factory) charts.factory.destroy();
+            charts.factory = new Chart(document.getElementById('factoryChart'), {
+                type: 'bar',
+                data: { 
+                    labels: sortedPlants.map(p => p[0]), 
+                    datasets: [{ data: sortedPlants.map(p => p[1].overPo), backgroundColor: '#0ea5e9', borderRadius: 4 }] 
+                },
+                options: { 
+                    responsive: true, maintainAspectRatio: false, 
+                    layout: { padding: { top: 20 } },
+                    plugins: { 
+                        legend: { display: false }, 
+                        tooltip: { callbacks: { label: (ctx) => ' ' + ctx.raw.toLocaleString() + ' ชิ้น' } },
+                        datalabels: { display: true, color: '#475569', anchor: 'end', align: 'top', formatter: (val) => val.toLocaleString() }
+                    },
+                    onClick: (e, els) => { if(els.length) openModal('Plant: '+sortedPlants[els[0].index][0], r => r.plant === sortedPlants[els[0].index][0]); }
+                }
+            });
+
+            // Table
+            const tbody = document.getElementById('factoryTableBody');
+            tbody.innerHTML = '';
+            sortedPlants.forEach(([plant, data]) => {
+                tbody.insertAdjacentHTML('beforeend', `
+                    <tr class="hover:bg-blue-50 transition cursor-pointer" onclick="openModal('Plant: ${plant}', r => r.plant === '${plant}')">
+                        <td class="p-3 font-semibold text-slate-700">🏭 ${plant}</td>
+                        <td class="p-3 text-right text-slate-600">${data.count.toLocaleString()}</td>
+                        <td class="p-3 text-right text-orange-500">${data.allowance.toLocaleString()}</td>
+                        <td class="p-3 text-right font-bold text-red-600">${data.overPo.toLocaleString()}</td>
+                    </tr>
+                `);
+            });
+        }
+
+        window.handleSort = function(col) {
+            if (state.sortBy === col) state.sortAsc = !state.sortAsc; else { state.sortBy = col; state.sortAsc = true; }
+            document.querySelectorAll('.sort-icon').forEach(el => el.textContent = '');
+            document.getElementById(`sort-${col}`).textContent = state.sortAsc ? '▲' : '▼';
+            state.page = 1; renderTable();
+        };
+
+        window.updateAction = async function(id, value) {
+            actionStates[id] = value;
+            try { await localforage.setItem('inventoryActions', actionStates); } catch(e){}
+            const tr = document.getElementById(`tr-${id}`);
+            if (tr) {
+                if(value === 'ดำเนินการแล้ว') tr.className = 'bg-slate-100 opacity-60 transition';
+                else if(value !== 'รอตรวจสอบ') tr.className = 'bg-yellow-50 transition';
+                else tr.className = 'hover:bg-blue-50 transition';
+                // update color of select box
+                tr.querySelector('select').style.color = getActionColor(value);
+            }
+            updateActionChartOnly();
+        };
+
+        function updateActionChartOnly() {
+            if(!charts.action) return;
+            updateProgressUI();
+            let actionCounts = {};
+            ACTION_OPTIONS.forEach(o => actionCounts[o] = 0);
+            activeData.forEach(row => {
+                let st = actionStates[row._id] || "รอตรวจสอบ";
+                // ใช้ st ถ้ามี ถ้าไม่มีให้เป็น รอตรวจสอบ
+                if(!ACTION_OPTIONS.includes(st)) st = "รอตรวจสอบ";
+                actionCounts[st] = (actionCounts[st] || 0) + row.overPo;
+            });
+            const actLabels = Object.keys(actionCounts).filter(k => actionCounts[k] > 0);
+            const actData = actLabels.map(k => actionCounts[k]);
+            const actColors = actLabels.map(k => getActionColor(k));
+            
+            charts.action.data.labels = actLabels;
+            charts.action.data.datasets[0].data = actData;
+            charts.action.data.datasets[0].backgroundColor = actColors;
+            charts.action.update();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            let sorted = [...activeData].sort((a, b) => {
+                let vA = a[state.sortBy], vB = b[state.sortBy];
+                if(typeof vA === 'string') { vA = vA.toLowerCase(); vB = vB.toLowerCase(); }
+                if (vA < vB) return state.sortAsc ? -1 : 1;
+                if (vA > vB) return state.sortAsc ? 1 : -1;
+                return 0;
+            });
+
+            const maxPage = Math.ceil(sorted.length / state.limit) || 1;
+            if (state.page > maxPage) state.page = maxPage;
+            
+            sorted.slice((state.page - 1) * state.limit, state.page * state.limit).forEach(row => {
+                let ageColor = row.age > 5 ? 'bg-red-100 text-red-700' : row.age > 3 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700';
+                
+                let currAction = actionStates[row._id] || "รอตรวจสอบ";
+                if(!ACTION_OPTIONS.includes(currAction)) currAction = "รอตรวจสอบ";
+
+                const optionsHtml = ACTION_OPTIONS.map(opt => `<option value="${opt}" ${currAction === opt ? 'selected':''}>${opt}</option>`).join('');
+                
+                let trClass = 'hover:bg-blue-50 transition';
+                if(currAction === 'ดำเนินการแล้ว') trClass = 'bg-slate-100 opacity-60';
+                else if(currAction !== 'รอตรวจสอบ') trClass = 'bg-yellow-50';
+
+                tbody.insertAdjacentHTML('beforeend', `
+                    <tr id="tr-${row._id}" class="${trClass}">
+                        <td class="p-3 border-r border-slate-100">
+                            <select onchange="updateAction('${row._id}', this.value)" class="text-xs border border-slate-300 rounded p-1.5 w-full bg-white font-semibold outline-none" style="color: ${getActionColor(currAction)}">
+                                ${optionsHtml}
+                            </select>
+                        </td>
+                        <td class="p-3 text-xs text-slate-500 font-mono">${row.plant}</td>
+                        <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold ${ageColor}">${row.age} ด.</span></td>
+                        <td class="p-3 font-medium text-slate-700 truncate max-w-[120px]" title="${row.reason}">${row.reason}</td>
+                        <td class="p-3">
+                            <div class="font-bold text-slate-900">${row.item} ${row.missingData ? '<span class="text-red-500 text-xs" title="ข้อมูลไม่ครบ">⚠️</span>' : ''}</div>
+                            <div class="text-xs text-slate-500 truncate max-w-[200px]" title="${row.desc}">${row.desc}</div>
+                            ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-600 truncate max-w-[200px] mt-0.5" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
+                        </td>
+                        <td class="p-3 text-right font-semibold text-orange-600">${row.allowance.toLocaleString()}</td>
+                        <td class="p-3 text-xs">${row.saleman}</td>
+                        <td class="p-3 text-right text-red-600 font-bold">${row.overPo.toLocaleString()}</td>
+                    </tr>
+                `);
+            });
+
+            document.getElementById('pageInfo').textContent = `หน้า ${state.page} / ${maxPage}`;
+            document.getElementById('btnPrevPage').disabled = state.page === 1;
+            document.getElementById('btnNextPage').disabled = state.page === maxPage || maxPage === 0;
+        }
+
+        window.exportToCSV = function() {
+            if(!activeData.length) return alert('ไม่มีข้อมูล');
+            const data = activeData.map(r => ({
+                'Plant': r.plant, 'Status': actionStates[r._id] || 'รอตรวจสอบ',
+                'Item': r.item, 'Description': r.desc, 'Planning Remarks': r.planRemark,
+                'Reason': r.reason, 'จำนวนเกิน PO': r.overPo, 'ค่าเผื่อ': r.allowance,
+                'อายุ (เดือน)': r.age, 'พนักงานขาย': r.saleman, 'ลูกค้า': r.customer
+            }));
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(new Blob(['\uFEFF' + Papa.unparse(data)], { type: 'text/csv;charset=utf-8;' }));
+            link.download = "inventory_action_plan.csv"; link.click();
+        };
+    </script>
+</body>
+</html>
