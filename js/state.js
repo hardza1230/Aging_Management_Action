@@ -23,7 +23,8 @@ export const headerKeywords = {
     customer: ['customer', 'ลูกค้า'],
     plant: ['plant', 'แพลนต์', 'สาขา'],
     allowance: ['ค่าเผื่อ', 'allowance'],
-    planRemark: ['planning remarks', 'planning remark', 'remark', 'หมายเหตุวางแผน']
+    planRemark: ['planning remarks', 'planning remark', 'remark', 'หมายเหตุวางแผน'],
+    actionStatus: ['สถานะการจัดการ', 'action status', 'status', 'จัดการ']
 };
 
 export const DEFAULT_ACTIONS = ["รอตรวจสอบ", "รอเคลียร์ตัวเลข", "รอ Rework", "รอส่งคืน", "รอทำลาย", "รอขายลดราคา", "ดำเนินการแล้ว"];
@@ -52,3 +53,4 @@ export const dataStore = {
 };
 
 export const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTfJvJCGJfmarGs9LqNQfjozHgcdUUTHryMsim9soay_UF6UOcyB4KpIhwHwNvxaUqC5W1OpbIHjsH9/pub?gid=0&single=true&output=csv";
+export const APPS_SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbzvh06DciAs8HYw_N_i7_oaBgNjAp10gVZjGwNlt1TRzpd7OedEi3FgxJHCS41xdtVXMA/exec";

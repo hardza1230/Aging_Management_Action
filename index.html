@@ -98,34 +98,13 @@
             <div class="flex gap-4 items-center">
                 <span class="text-sm text-slate-400">v8.0 (ES Modules)</span>
                 <button id="btnRefreshSheets"
-                    class="hidden text-xs bg-green-600 hover:bg-green-700 px-3 py-1 rounded transition">ดึงข้อมูลจาก
-                    Sheets</button>
-                <button id="btnClearData"
-                    class="hidden text-xs bg-red-500 hover:bg-red-600 px-3 py-1 rounded transition">ล้างข้อมูล/อัปโหลดใหม่</button>
+                    class="hidden text-xs bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded transition">🔄
+                    อัปเดตข้อมูล</button>
             </div>
         </div>
     </nav>
 
     <div class="container mx-auto px-4">
-
-        <!-- Welcome / Upload Section (shown when no data) -->
-        <div id="uploadSection" class="card bg-white p-8 rounded-xl shadow-sm text-center mb-8">
-            <div id="dropZone" class="drop-zone p-12 rounded-lg cursor-pointer">
-                <input type="file" id="fileInput" class="hidden" accept=".csv">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-slate-400 mb-4" fill="none"
-                    viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <h2 class="text-xl font-semibold mb-2">เข้าถึงข้อมูลสต็อกสินค้าคงคลัง</h2>
-                <p class="text-slate-500 mb-6">กำลังดึงข้อมูลจาก Google Sheets อัตโนมัติ หรืออัปโหลดไฟล์ (.csv)
-                    ด้วยตนเอง</p>
-                <div class="flex justify-center gap-4">
-                    <button class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-bold"
-                        onclick="document.getElementById('fileInput').click()">เลือกไฟล์ CSV</button>
-                </div>
-            </div>
-        </div>
 
         <!-- Dashboard Section -->
         <div id="resultsSection" class="hidden">

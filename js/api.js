@@ -1,12 +1,22 @@
-import { GOOGLE_SHEET_URL, headerKeywords, dataStore, state } from './state.js';
+import { GOOGLE_SHEET_URL, APPS_SCRIPT_API_URL, headerKeywords, dataStore, state } from './state.js';
 import { parseNum, calculateAgeMonths, findHeader, showLoading, hideLoading } from './utils.js';
 
-export async function clearLocalData() {
-    if (confirm('ล้างข้อมูลปัจจุบันและอัปโหลดไฟล์ใหม่?')) {
-        await localforage.clear();
-        location.reload();
+export async function saveActionToSheet(rowId, status) {
+    if (!APPS_SCRIPT_API_URL) return; // ถ้าไม่ได้ระบุ URL ก็ข้ามไป (ใช้แค่ Local)
+
+    try {
+        await fetch(APPS_SCRIPT_API_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify({ rowId, status }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+        console.log(`📡 ซิงค์ข้อมูล "${status}" ไปยัง Google Sheet แล้ว (${rowId})`);
+    } catch (e) {
+        console.error("Sheet sync failed", e);
     }
 }
+
 
 export async function fetchGoogleSheet() {
     showLoading(20, 'กำลังดึงข้อมูลจาก Google Sheets...');
@@ -51,7 +61,8 @@ export function processData(rawData) {
         customer: findHeader(sr, headerKeywords.customer),
         plant: findHeader(sr, headerKeywords.plant),
         allowance: findHeader(sr, headerKeywords.allowance),
-        planRemark: findHeader(sr, headerKeywords.planRemark)
+        planRemark: findHeader(sr, headerKeywords.planRemark),
+        actionStatus: findHeader(sr, headerKeywords.actionStatus)
     };
 
     if (!map.overPo) {
@@ -76,8 +87,12 @@ export function processData(rawData) {
                     finalReason = 'รอข้อมูลวางแผน';
                 }
 
+                const rowId = `row_${i}_${row[map.item] || 'u'}`;
+                const sheetStatus = map.actionStatus && row[map.actionStatus] ? String(row[map.actionStatus]).trim() : '';
+                if (sheetStatus) dataStore.actionStates[rowId] = sheetStatus;
+
                 processed.push({
-                    _id: `row_${i}_${row[map.item] || 'u'}`,
+                    _id: rowId,
                     overPo: overVal,
                     reason: finalReason,
                     age: ageMonths,
@@ -92,6 +107,9 @@ export function processData(rawData) {
                 });
             }
         });
+
+        // Save synchronized actions to localForage
+        try { await localforage.setItem('inventoryActions', dataStore.actionStates); } catch (e) { }
 
         dataStore.allFilteredData = processed;
 

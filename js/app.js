@@ -1,6 +1,6 @@
 import { state, dataStore, CORE_ACTIONS, DEFAULT_ACTIONS, getActionColor } from './state.js';
 import { updateDashboard, renderTable, updateProgressUI, openModal } from './ui.js';
-import { fetchGoogleSheet, clearLocalData, processData } from './api.js';
+import { fetchGoogleSheet, processData, saveActionToSheet } from './api.js';
 import { closeModal, openModalById } from './utils.js';
 
 // Global Event Listeners & Initialization
@@ -31,12 +31,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 function setupEventListeners() {
-    // Dropzone & File Input
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileInput');
-    if (dropZone) dropZone.onclick = () => fileInput?.click();
-    if (fileInput) fileInput.onchange = (e) => { if (e.target.files.length > 0) handleLocalFile(e.target.files[0]); };
-
     // Filters
     ['filterSearch', 'filterPlant', 'filterSaleman', 'filterCustomer'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', (e) => {
@@ -52,7 +46,6 @@ function setupEventListeners() {
     document.getElementById('filterAgeMax')?.addEventListener('input', syncAgeFilter);
 
     // Buttons
-    document.getElementById('btnClearData')?.addEventListener('click', clearLocalData);
     document.getElementById('btnRefreshSheets')?.addEventListener('click', fetchGoogleSheet);
     document.getElementById('btnPrevPage')?.addEventListener('click', () => { if (state.page > 1) { state.page--; renderTable(); } });
     document.getElementById('btnNextPage')?.addEventListener('click', () => {
@@ -71,14 +64,6 @@ function setupEventListeners() {
     window.removeActionOption = removeActionOption;
 }
 
-function handleLocalFile(file) {
-    if (!file || !file.name.endsWith('.csv')) return alert('อัปโหลดไฟล์ CSV เท่านั้น');
-    Papa.parse(file, {
-        header: true, skipEmptyLines: true, worker: true,
-        complete: (results) => processData(results.data),
-        error: (err) => alert('Error: ' + err.message)
-    });
-}
 
 function syncAgeFilter() {
     let min = parseInt(document.getElementById('filterAgeMin').value);
@@ -90,9 +75,7 @@ function syncAgeFilter() {
 }
 
 function setupDashboard(skipFetch = false) {
-    document.getElementById('uploadSection')?.classList.add('hidden');
     document.getElementById('resultsSection')?.classList.remove('hidden');
-    document.getElementById('btnClearData')?.classList.remove('hidden');
     document.getElementById('btnRefreshSheets')?.classList.remove('hidden');
 
     // Populate Filters
@@ -114,6 +97,9 @@ document.body.addEventListener('change', async (e) => {
         const val = e.target.value;
         dataStore.actionStates[id] = val;
         try { await localforage.setItem('inventoryActions', dataStore.actionStates); } catch (e) { }
+
+        // ส่งข้อมูลกลับไปบันทึกที่ Google Sheet (Collaborative)
+        saveActionToSheet(id, val);
 
         const tr = document.getElementById(`tr-${id}`);
         if (tr) {
