@@ -17,15 +17,13 @@ export function updateDashboard() {
     let actionCounts = {};
     dataStore.actionOptions.forEach(o => actionCounts[o] = 0);
     let totalExceed = 0, humanError = 0, deadStock = 0, missingCount = 0;
+    let totalStockQty = 0, totalPoQty = 0, withPoCount = 0;
 
     dataStore.activeData.forEach(row => {
         totalExceed += row.overPo;
-        let rStr = String(row.reason);
-        if (rStr.includes('15') || rStr.includes('17') || rStr.includes('ผลิต')) humanError += row.overPo;
-        if (row.age > 5) deadStock++;
-        if (row.missingData) missingCount++;
+        if (row.overPo > 0) withPoCount++;
 
-        reasonMap[row.reason] = (reasonMap[row.reason] || 0) + 1;
+        reasonMap[row.reason] = (reasonMap[row.reason] || 0) + (state.chartMode === 'qty' ? row.overPo : 1);
         salesmanMap[row.saleman] = (salesmanMap[row.saleman] || 0) + row.overPo;
 
         if (row.age <= 1) ageBuckets['1 เดือน'] += row.overPo;
@@ -38,14 +36,23 @@ export function updateDashboard() {
 
         let st = dataStore.actionStates[row._id] || "รอตรวจสอบ";
         if (!dataStore.actionOptions.includes(st)) st = "รอตรวจสอบ";
-        actionCounts[st] = (actionCounts[st] || 0) + row.overPo;
+        actionCounts[st] = (actionCounts[st] || 0) + (state.chartMode === 'qty' ? row.overPo : 1);
     });
 
-    document.getElementById('kpiTotalSkus').textContent = dataStore.activeData.length.toLocaleString();
-    document.getElementById('kpiTotalExceed').textContent = totalExceed.toLocaleString();
-    document.getElementById('kpiDeadStock').textContent = deadStock.toLocaleString();
-    document.getElementById('kpiHumanError').textContent = humanError.toLocaleString();
-    document.getElementById('kpiMissingData').textContent = missingCount.toLocaleString();
+    const totalSkus = dataStore.activeData.length;
+    // For KPI Demo/Logic:
+    // 1. จํานวน รายการ (ไอเทม) -> totalSkus
+    // 2. สต็อกทั้งหมด (ใบ) -> We'll sum row.overPo + row.allowance as a proxy or just row.overPo if that's the "affected" stock
+    // Actually, usually users want the sum of the over-po pieces for "Stock (ใบ)" in this context.
+
+    // Let's calculate percentage
+    const overPoCount = dataStore.activeData.filter(r => r.overPo > 0).length;
+    const overPoPct = totalSkus ? Math.round((overPoCount / totalSkus) * 100) : 0;
+
+    document.getElementById('kpiTotalSkus').textContent = totalSkus.toLocaleString();
+    document.getElementById('kpiTotalStock').textContent = totalExceed.toLocaleString();
+    document.getElementById('kpiWithPo').innerHTML = `${withPoCount.toLocaleString()} <span class="text-xs font-normal opacity-70">(${withPoPct}%)</span>`;
+    document.getElementById('kpiOverPo').innerHTML = `${overPoCount.toLocaleString()} <span class="text-xs font-normal opacity-70">(${overPoPct}%)</span>`;
 
     updateProgressUI();
     updateCharts(reasonMap, ageBuckets, salesmanMap, actionCounts);
@@ -54,6 +61,17 @@ export function updateDashboard() {
     renderAnalysisTab(reasonMap);
     renderTable();
 }
+
+window.setChartMode = function (mode, btn) {
+    state.chartMode = mode;
+    document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.remove('bg-indigo-600', 'text-white', 'active');
+        b.classList.add('bg-white', 'text-slate-600');
+    });
+    btn.classList.add('bg-indigo-600', 'text-white', 'active');
+    btn.classList.remove('bg-white', 'text-slate-600');
+    updateDashboard();
+};
 
 export function updateProgressUI() {
     let totalCases = dataStore.activeData.length;
@@ -158,6 +176,7 @@ export function renderTable() {
                 <td class="p-3 text-xs text-slate-500 font-mono">${row.plant}</td>
                 <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold ${ageColor}">${row.age} ด.</span></td>
                 <td class="p-3 font-medium text-slate-700 truncate max-w-[120px]" title="${row.reason}">${row.reason}</td>
+                <td class="p-3 text-xs text-slate-600">${row.latestSale || '-'}</td>
                 <td class="p-3">
                     <div class="font-bold text-slate-900">${row.item} ${row.missingData ? '<span class="text-red-500 text-xs" title="ข้อมูลไม่ครบ">⚠️</span>' : ''}</div>
                     <div class="text-xs text-slate-500 truncate max-w-[200px]" title="${row.desc}">${row.desc}</div>

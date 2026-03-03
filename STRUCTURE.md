@@ -4,22 +4,24 @@ Project structure and logic mapping to ensure consistency and prevent AI halluci
 
 ## 📁 Project Structure
 
+- `STRUCTURE.md`: Project summary and rules.
+- `PROBLEM.md`: Log of user problems and implementation history.
 - `index.html`: Main UI entry point (Clean HTML, no logic).
 - `css/style.css`: All styling (Vanilla CSS + Tailwind utilities).
 - `js/`: Application logic using **ES Modules**.
-  - `state.js`: Global constants, header keywords, and central `dataStore`. (Includes Google Apps Script API URLs).
-  - `utils.js`: Helper functions (parsing numbers, date calculations, modal management).
-  - `api.js`: Data fetching (Google Sheets Fetch) and **Action Sync (POST to Apps Script)**.
-  - `charts.js`: Chart.js configurations and update logic.
-  - `ui.js`: DOM rendering for tables, dashboards, and tabs.
-  - `app.js`: Main entry point, event listeners, and high-level orchestration.
+  - `state.js`: Constants, keywords, and `dataStore`.
+  - `utils.js`: Helper functions (parsing, dates, modals).
+  - `api.js`: Data fetching (Sheets) and **Manual Action Sync**.
+  - `charts.js`: Chart.js configurations.
+  - `ui.js`: DOM rendering for tables and dashboards.
+  - `app.js`: Event listeners and orchestration.
 
 ## 🚀 Key Features
 
 1. **Google Sheets Central Source**: Fetches live data from a published Google Sheet CSV on startup.
-2. **Collaborative Action Status**: Team-wide status synchronization. Selecting a status in the UI triggers a POST request to a Google Apps Script Web App, which updates the master Google Sheet.
-3. **Automated Header Mapping**: Uses keyword matching in `state.js` to find correct columns (supports "สถานะการจัดการ").
-4. **Historical Analysis Prepared**: Web App logic is ready to handle "Snapshot Date" columns for future trend analysis.
+2. **Collaborative Action Status (Manual Save)**: Team-wide status sync. Users must click "Save" or "Save All" to push data to Google Sheets via Apps Script.
+3. **Enhanced Header Mapping**: Keyword matching for "Action (วิธีการ)" and "Snapshot Date".
+4. **Data Accuracy**: Uses `rowId`, `Snapshot Date`, and `Item` for precise row matching on the server.
 5. **ES Modules & Clean UI**: Modularized logic for maintenance; TailwindCSS for premium aesthetic.
 
 ## 🛠 Tech Stack

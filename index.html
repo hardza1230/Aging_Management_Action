@@ -173,31 +173,28 @@
                     </button>
                 </div>
 
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500 clickable-card relative"
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-400 clickable-card"
                         onclick="openModal('รายการทั้งหมด', r => true)">
-                        <p class="text-xs text-slate-500 uppercase">รายการมีปัญหา</p>
-                        <h3 id="kpiTotalSkus" class="text-2xl font-bold text-slate-800">0</h3>
+                        <p class="text-xs text-slate-500 uppercase font-bold">จำนวน รายการ (ไอเทม)</p>
+                        <h3 id="kpiTotalSkus" class="text-2xl font-bold text-slate-900">0</h3>
                     </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500 clickable-card relative"
-                        onclick="openModal('รายการทั้งหมดเรียงตามจำนวนเกิน PO', r => true)">
-                        <p class="text-xs text-slate-500 uppercase">ส่วนเกินรวม (ชิ้น)</p>
-                        <h3 id="kpiTotalExceed" class="text-2xl font-bold text-red-600">0</h3>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-600 clickable-card"
+                        onclick="openModal('รายการที่มีสต็อก', r => true)">
+                        <p class="text-xs text-slate-500 uppercase font-bold">สต็อกทั้งหมด (ใบ)</p>
+                        <h3 id="kpiTotalStock" class="text-2xl font-bold text-slate-900">0</h3>
                     </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-rose-600 bg-rose-50 clickable-card relative"
-                        onclick="openModal('Dead Stock (>5 เดือน)', r => r.age > 5)">
-                        <p class="text-xs text-rose-600 uppercase font-semibold">Dead Stock (>5 เดือน)</p>
-                        <h3 id="kpiDeadStock" class="text-2xl font-bold text-rose-700">0</h3>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-green-500 bg-green-50 clickable-card"
+                        onclick="openModal('รายการที่มีพีโอ', r => true)">
+                        <p class="text-xs text-green-700 uppercase font-bold">มีพีโอ (ใบ) / %</p>
+                        <h3 id="kpiWithPo" class="text-2xl font-bold text-green-600">0 <span
+                                class="text-sm font-normal">(0%)</span></h3>
                     </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-purple-500 bg-purple-50 clickable-card relative"
-                        onclick="openModal('Human Error (ผลิตเกิน)', r => r.reason.includes('15') || r.reason.includes('17') || r.reason.includes('ผลิต'))">
-                        <p class="text-xs text-purple-600 uppercase font-semibold">Human Error</p>
-                        <h3 id="kpiHumanError" class="text-2xl font-bold text-purple-700">0</h3>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-orange-500 bg-orange-50 clickable-card relative"
-                        onclick="openModal('ข้อมูลแหว่ง', r => r.missingData)">
-                        <p class="text-xs text-orange-600 uppercase font-semibold">ข้อมูลแหว่ง (Quality)</p>
-                        <h3 id="kpiMissingData" class="text-2xl font-bold text-orange-700">0</h3>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500 bg-red-50 clickable-card"
+                        onclick="openModal('รายการที่เกินพีโอ', r => true)">
+                        <p class="text-xs text-red-700 uppercase font-bold">เกิน PO (ใบ) / %</p>
+                        <h3 id="kpiOverPo" class="text-2xl font-bold text-red-600">0 <span
+                                class="text-sm font-normal">(0%)</span></h3>
                     </div>
                 </div>
 
@@ -226,9 +223,19 @@
                             (จำนวนใบ)</h4>
                         <div class="donut-container flex-1"><canvas id="actionChart"></canvas></div>
                     </div>
-                    <div class="bg-white p-5 rounded-xl shadow-sm col-span-2">
-                        <h4 class="font-bold text-slate-700 text-sm mb-2">สัดส่วนตามสาเหตุ (ความถี่/จำนวนรายการ)</h4>
-                        <div class="chart-container"><canvas id="reasonChart"></canvas></div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm col-span-2 flex flex-col">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="font-bold text-slate-700 text-sm">สัดส่วนตามสาเหตุ</h4>
+                            <div class="flex border border-slate-200 rounded-lg overflow-hidden text-[10px]">
+                                <button onclick="setChartMode('cases', this)"
+                                    class="mode-btn px-2 py-1 bg-white hover:bg-indigo-50 transition">ใบ
+                                    (รายการ)</button>
+                                <button onclick="setChartMode('qty', this)"
+                                    class="mode-btn px-2 py-1 bg-indigo-600 text-white transition active">ชิ้น
+                                    (จำนวน)</button>
+                            </div>
+                        </div>
+                        <div class="chart-container flex-1"><canvas id="reasonChart"></canvas></div>
                     </div>
                     <div class="bg-white p-5 rounded-xl shadow-sm lg:col-span-3">
                         <h4 class="font-bold text-slate-700 text-sm mb-2">ช่วงอายุสต็อกส่วนเกิน (คลิกแท่งเพื่อดูข้อมูล)
@@ -243,10 +250,7 @@
                 <div class="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-[75vh]">
                     <div class="p-4 bg-slate-50 border-b flex justify-between items-center">
                         <h4 class="font-bold text-slate-700 uppercase text-sm">อัปเดตสถานะการจัดการสต็อกส่วนเกิน</h4>
-                        <button id="btnSaveAll" onclick="saveAllVisibleActions()"
-                            class="text-xs bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 shadow-sm font-bold transition">
-                            💾 บันทึกที่เลือกทั้งหมด
-                        </button>
+                        <!-- ปุ่มบันทึกที่เลือกทั้งหมดถูกเอาออกตามคำขอ -->
                     </div>
                     <div class="overflow-y-auto flex-1 relative">
                         <table class="w-full text-left text-sm whitespace-nowrap">
@@ -259,6 +263,8 @@
                                             class="sort-icon" id="sort-age"></span></th>
                                     <th class="p-3 font-semibold sortable" onclick="handleSort('reason')">Reason <span
                                             class="sort-icon" id="sort-reason"></span></th>
+                                    <th class="p-3 font-semibold sortable" onclick="handleSort('latestSale')">ขายล่าสุด
+                                        <span class="sort-icon" id="sort-latestSale"></span></th>
                                     <th class="p-3 font-semibold sortable" onclick="handleSort('item')">Item / Desc /
                                         Remarks <span class="sort-icon" id="sort-item"></span></th>
                                     <th class="p-3 font-semibold text-right text-orange-600 sortable"

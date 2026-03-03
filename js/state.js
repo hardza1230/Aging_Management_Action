@@ -8,7 +8,8 @@ export const state = {
     page: 1,
     limit: 30,
     sortBy: 'overPo',
-    sortAsc: false
+    sortAsc: false,
+    chartMode: 'qty' // 'cases' or 'qty'
 };
 
 export const headerKeywords = {
@@ -24,6 +25,7 @@ export const headerKeywords = {
     plant: ['plant', 'แพลนต์', 'สาขา'],
     allowance: ['ค่าเผื่อ', 'allowance'],
     planRemark: ['planning remarks', 'planning remark', 'remark', 'หมายเหตุวางแผน'],
+    latestSale: ['ขายล่าสุด', 'last sale', 'latest sale'],
     actionStatus: ['action (วิธีการ)', 'วิธีการ', 'สถานะการจัดการ', 'action status', 'status', 'จัดการ']
 };
 

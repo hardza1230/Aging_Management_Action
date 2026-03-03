@@ -63,6 +63,7 @@ export function processData(rawData) {
         plant: findHeader(sr, headerKeywords.plant),
         allowance: findHeader(sr, headerKeywords.allowance),
         planRemark: findHeader(sr, headerKeywords.planRemark),
+        latestSale: findHeader(sr, headerKeywords.latestSale),
         actionStatus: findHeader(sr, headerKeywords.actionStatus),
         snapshotDate: findHeader(sr, ['snapshot date', 'วันที่ดึงข้อมูล', 'วันที่'])
     };
@@ -105,6 +106,7 @@ export function processData(rawData) {
                     plant: map.plant && row[map.plant] ? row[map.plant] : '-',
                     allowance: map.allowance ? parseNum(row[map.allowance]) : 0,
                     planRemark: map.planRemark && row[map.planRemark] ? String(row[map.planRemark]).trim() : '-',
+                    latestSale: map.latestSale ? row[map.latestSale] : '-',
                     snapshotDate: map.snapshotDate ? row[map.snapshotDate] : '-',
                     missingData: (!rawDate || !reasonRaw || reasonRaw === '-')
                 });
