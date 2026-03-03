@@ -140,6 +140,40 @@ export function processData(rawData) {
                 dataStore.snapDates = uniqueDates;
             }
 
+            // 1. Build a map of the absolute latest recorded status for every Item+Plant in history
+            const historyStatusMap = {};
+            // Use a simple date parsing helper for sorting
+            const getSortDate = (s) => {
+                let d = new Date(s);
+                if (!isNaN(d)) return d;
+                const parts = String(s).split(/[\/\-\.]/);
+                if (parts.length === 3) {
+                    let [a, b, c] = parts.map(Number);
+                    if (c > 2500) c -= 543;
+                    d = new Date(c, b - 1, a);
+                }
+                if (s && (String(s).toLowerCase().includes('current') || String(s).includes('ล่าสุด'))) return new Date(8640000000000000);
+                return isNaN(d) ? new Date(0) : d;
+            };
+
+            // Process from oldest to newest snapshot so the latest status wins
+            [...processed].sort((a, b) => getSortDate(a.snapshotDate) - getSortDate(b.snapshotDate)).forEach(row => {
+                if (row.status && row.status !== 'รอตรวจสอบ' && row.status !== '-') {
+                    historyStatusMap[`${row.item}|${row.plant}`] = row.status;
+                }
+            });
+
+            // 2. Apply historical status to current data if current is empty
+            processed.forEach(row => {
+                const currentStatus = dataStore.actionStates[row._id];
+                if (!currentStatus || currentStatus === 'รอตรวจสอบ' || currentStatus === '-') {
+                    const historicalStatus = historyStatusMap[`${row.item}|${row.plant}`];
+                    if (historicalStatus) {
+                        dataStore.actionStates[row._id] = historicalStatus;
+                    }
+                }
+            });
+
             // Persistence and State
             try { await localforage.setItem('inventoryActions', dataStore.actionStates); } catch (e) { }
             dataStore.allFilteredData = processed;
