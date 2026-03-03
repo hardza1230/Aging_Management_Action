@@ -76,7 +76,14 @@ export function renderProgressTab() {
     let itemSnapshotStats = {};
 
     dataStore.allFilteredData.forEach(row => {
-        if (row.age < state.ageMin || row.age > state.ageMax) return;
+        const searchStr = `${row.item} ${row.desc} ${row.planRemark}`.toLowerCase();
+        const mSearch = !state.search || searchStr.includes(state.search);
+        const mPlant = state.plant === 'all' || String(row.plant) === state.plant;
+        const mSaleman = state.saleman === 'all' || String(row.saleman) === state.saleman;
+        const mCustomer = state.customer === 'all' || String(row.customer) === state.customer;
+        const mAge = row.age >= state.ageMin && row.age <= state.ageMax;
+
+        if (!(mSearch && mPlant && mSaleman && mCustomer && mAge)) return;
 
         const date = row.snapshotDate || 'No Date';
         if (!history[date]) history[date] = { date, skus: 0, overPo: 0, done: 0 };
@@ -342,9 +349,14 @@ export function renderTable() {
                 <td class="p-2 align-top max-w-[280px]">
                     <div class="font-bold text-slate-900 text-sm leading-tight">${row.item} ${row.missingData ? '<span class="text-red-400 text-[10px]">⚠</span>' : ''}</div>
                     <div class="text-[11px] text-slate-500 truncate mt-0.5" title="${row.desc}">${row.desc}</div>
-                    <div class="text-[10px] text-indigo-600 font-semibold mt-1 truncate" title="${row.reason}">📌 ${row.reason}</div>
-                    ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-500 truncate mt-0.5" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
-                    <div class="text-[10px] text-slate-400 mt-1">🗓 ขายล่าสุด: <span class="font-medium text-slate-500">${row.latestSale || '-'}</span></div>
+                    <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                        <div class="text-[10px] text-indigo-600 font-semibold truncate" title="${row.reason}">📌 ${row.reason}</div>
+                        ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-500 truncate" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
+                    </div>
+                    <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                        <div class="text-[10px] text-slate-400">🗓 ขายล่าสุด: <span class="font-medium text-slate-500">${row.latestSale || '-'}</span></div>
+                        <div class="text-[10px] text-slate-400">🌐 สถานะบนคลาวด์: <span class="font-bold" style="color: ${getActionColor(row.sheetStatus)}">${row.sheetStatus || 'รอตรวจสอบ'}</span></div>
+                    </div>
                 </td>
                 <td class="p-2 text-right text-xs text-orange-600 font-medium align-top whitespace-nowrap">${allowanceDisplay}</td>
                 <td class="p-2 text-xs text-slate-600 align-top">${row.saleman}</td>
