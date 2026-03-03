@@ -60,5 +60,5 @@ export const dataStore = {
 };
 
 export const MASTER_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTfJvJCGJfmarGs9LqNQfjozHgcdUUTHryMsim9soay_UF6UOcyB4KpIhwHwNvxaUqC5W1OpbIHjsH9/pub?gid=0&single=true&output=csv";
-export const CURRENT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTfJvJCGJfmarGs9LqNQfjozHgcdUUTHryMsim9soay_UF6UOcyB4KpIhwHwNvxaUqC5W1OpbIHjsH9/pub?gid=0&single=true&output=csv"; // [แก้ไขตรงนี้] เปลี่ยน GID ให้เป็นเลขของแผ่นงาน Current
+export const CURRENT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTfJvJCGJfmarGs9LqNQfjozHgcdUUTHryMsim9soay_UF6UOcyB4KpIhwHwNvxaUqC5W1OpbIHjsH9/pub?gid=1739027685&single=true&output=csv";
 export const APPS_SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbzvh06DciAs8HYw_N_i7_oaBgNjAp10gVZjGwNlt1TRzpd7OedEi3FgxJHCS41xdtVXMA/exec";
