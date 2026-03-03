@@ -1,6 +1,6 @@
 import { state, dataStore, CORE_ACTIONS, DEFAULT_ACTIONS, getActionColor } from './state.js';
 import { updateDashboard, renderTable, updateProgressUI, openModal } from './ui.js';
-import { fetchGoogleSheet, processDualData, saveActionToSheet } from './api.js';
+import { fetchGoogleSheet, processData, saveActionToSheet } from './api.js';
 import { closeModal, openModalById } from './utils.js';
 
 // Global Event Listeners & Initialization
@@ -15,24 +15,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const savedActions = await localforage.getItem('inventoryActions');
         dataStore.actionStates = savedActions || {};
 
-        if (savedData && savedData.length > 0) {
+        if (savedData) {
             dataStore.allFilteredData = savedData;
-            // Populate currentData from cache (latest snapshot or 'Current')
-            dataStore.currentData = savedData.filter(d =>
-                String(d.snapshotDate).toLowerCase().includes('current') ||
-                String(d.snapshotDate).includes('ล่าสุด')
-            );
-            if (dataStore.currentData.length === 0) {
-                // fallback: use max date
-                const dates = [...new Set(savedData.map(d => d.snapshotDate))].filter(x => x && x !== '-');
-                if (dates.length) {
-                    const latest = dates.sort().at(-1);
-                    dataStore.currentData = savedData.filter(d => d.snapshotDate === latest);
-                }
-            }
             setupDashboard(true);
         } else {
-            // First time or no data - fetch from Google Sheets
+            // First time or no data - try fetching from Google Sheets
             fetchGoogleSheet();
         }
     } catch (e) {
