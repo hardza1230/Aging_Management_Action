@@ -1,17 +1,18 @@
 import { GOOGLE_SHEET_URL, APPS_SCRIPT_API_URL, headerKeywords, dataStore, state } from './state.js';
 import { parseNum, calculateAgeMonths, findHeader, showLoading, hideLoading } from './utils.js';
 
-export async function saveActionToSheet(rowId, status) {
+export async function saveActionToSheet(rowId, status, item, plant, snapshotDate) {
     if (!APPS_SCRIPT_API_URL) return; // ถ้าไม่ได้ระบุ URL ก็ข้ามไป (ใช้แค่ Local)
 
     try {
+        const payload = { rowId, status, item, plant, snapshotDate, timestamp: new Date().toISOString() };
         await fetch(APPS_SCRIPT_API_URL, {
             method: 'POST',
             mode: 'no-cors',
-            body: JSON.stringify({ rowId, status }),
+            body: JSON.stringify(payload),
             headers: { 'Content-Type': 'application/json' }
         });
-        console.log(`📡 ซิงค์ข้อมูล "${status}" ไปยัง Google Sheet แล้ว (${rowId})`);
+        console.log(`📡 ซิงค์ข้อมูล "${status}" ของ ${item} (${plant}) ไปยัง Sheet แล้ว`);
     } catch (e) {
         console.error("Sheet sync failed", e);
     }
@@ -62,7 +63,8 @@ export function processData(rawData) {
         plant: findHeader(sr, headerKeywords.plant),
         allowance: findHeader(sr, headerKeywords.allowance),
         planRemark: findHeader(sr, headerKeywords.planRemark),
-        actionStatus: findHeader(sr, headerKeywords.actionStatus)
+        actionStatus: findHeader(sr, headerKeywords.actionStatus),
+        snapshotDate: findHeader(sr, ['snapshot date', 'วันที่ดึงข้อมูล', 'วันที่'])
     };
 
     if (!map.overPo) {
@@ -103,6 +105,7 @@ export function processData(rawData) {
                     plant: map.plant && row[map.plant] ? row[map.plant] : '-',
                     allowance: map.allowance ? parseNum(row[map.allowance]) : 0,
                     planRemark: map.planRemark && row[map.planRemark] ? String(row[map.planRemark]).trim() : '-',
+                    snapshotDate: map.snapshotDate ? row[map.snapshotDate] : '-',
                     missingData: (!rawDate || !reasonRaw || reasonRaw === '-')
                 });
             }

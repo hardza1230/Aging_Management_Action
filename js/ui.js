@@ -143,11 +143,17 @@ export function renderTable() {
 
         tbody.insertAdjacentHTML('beforeend', `
             <tr id="tr-${row._id}" class="${trClass}">
-                <td class="p-3 border-r border-slate-100">
-                    <select class="action-select text-xs border border-slate-300 rounded p-1.5 w-full bg-white font-semibold outline-none" 
-                            data-id="${row._id}" style="color: ${getActionColor(currAction)}">
-                        ${optionsHtml}
-                    </select>
+                <td class="p-3 border-r border-slate-100 min-w-[160px]">
+                    <div class="flex gap-2 items-center">
+                        <select class="action-select text-xs border border-slate-300 rounded p-1.5 flex-1 bg-white font-semibold outline-none" 
+                                data-id="${row._id}" style="color: ${getActionColor(currAction)}">
+                            ${optionsHtml}
+                        </select>
+                        <button class="save-action-btn bg-indigo-500 hover:bg-indigo-600 text-white text-[10px] px-2 py-1.5 rounded shadow-sm transition-colors"
+                                data-id="${row._id}">
+                            Save
+                        </button>
+                    </div>
                 </td>
                 <td class="p-3 text-xs text-slate-500 font-mono">${row.plant}</td>
                 <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold ${ageColor}">${row.age} ด.</span></td>

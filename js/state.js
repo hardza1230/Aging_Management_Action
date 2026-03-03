@@ -24,7 +24,7 @@ export const headerKeywords = {
     plant: ['plant', 'แพลนต์', 'สาขา'],
     allowance: ['ค่าเผื่อ', 'allowance'],
     planRemark: ['planning remarks', 'planning remark', 'remark', 'หมายเหตุวางแผน'],
-    actionStatus: ['สถานะการจัดการ', 'action status', 'status', 'จัดการ']
+    actionStatus: ['action (วิธีการ)', 'วิธีการ', 'สถานะการจัดการ', 'action status', 'status', 'จัดการ']
 };
 
 export const DEFAULT_ACTIONS = ["รอตรวจสอบ", "รอเคลียร์ตัวเลข", "รอ Rework", "รอส่งคืน", "รอทำลาย", "รอขายลดราคา", "ดำเนินการแล้ว"];

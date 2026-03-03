@@ -98,15 +98,49 @@ document.body.addEventListener('change', async (e) => {
         dataStore.actionStates[id] = val;
         try { await localforage.setItem('inventoryActions', dataStore.actionStates); } catch (e) { }
 
-        // ส่งข้อมูลกลับไปบันทึกที่ Google Sheet (Collaborative)
-        saveActionToSheet(id, val);
-
         const tr = document.getElementById(`tr-${id}`);
         if (tr) {
             tr.className = (val === 'ดำเนินการแล้ว') ? 'bg-slate-100 opacity-60 transition' : (val !== 'รอตรวจสอบ' ? 'bg-yellow-50 transition' : 'hover:bg-blue-50 transition');
             e.target.style.color = getActionColor(val);
         }
         updateActionChartOnly();
+
+        // เราจะไม่เซฟไป Cloud ทันที เพื่อลดปัญหา Row เลื่อนตอนคนอื่นแก้อยู่
+        // ให้กดปุ่ม Save แทน
+    }
+});
+
+document.body.addEventListener('click', async (e) => {
+    if (e.target.classList.contains('save-action-btn')) {
+        const btn = e.target;
+        const id = btn.getAttribute('data-id');
+        const select = document.querySelector(`.action-select[data-id="${id}"]`);
+        const val = select ? select.value : (dataStore.actionStates[id] || "รอตรวจสอบ");
+        const row = dataStore.allFilteredData.find(r => r._id === id);
+
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳...';
+        btn.classList.replace('bg-indigo-500', 'bg-slate-400');
+
+        try {
+            await saveActionToSheet(id, val, row?.item, row?.plant, row?.snapshotDate);
+            btn.textContent = '✅';
+            btn.classList.replace('bg-slate-400', 'bg-green-500');
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+                btn.classList.replace('bg-green-500', 'bg-indigo-500');
+            }, 2000);
+        } catch (err) {
+            btn.textContent = '❌';
+            btn.classList.replace('bg-slate-400', 'bg-red-500');
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+                btn.classList.replace('bg-red-500', 'bg-indigo-500');
+            }, 3000);
+        }
     }
 });
 
