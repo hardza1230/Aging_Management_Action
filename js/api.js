@@ -154,22 +154,16 @@ export function processData(rawData) {
         // Save synchronized actions to localForage
         try { await localforage.setItem('inventoryActions', dataStore.actionStates); } catch (e) { }
 
-        // 1. Keep the full historical set for the Progress/History tab
+        // Separate "Current" rows for the dashboard while keeping allFilteredData as the full set (Master)
         dataStore.allFilteredData = processed;
+        dataStore.currentData = processed.filter(d => String(d.snapshotDate).toLowerCase().includes('current') || String(d.snapshotDate).includes('ล่าสุด'));
 
-        // 2. Build the "Current" set for the Dashboard by deduplicating (overwriting)
-        // Sort by date (oldest to newest) so that later records for the same item overwrite older ones
-        const sortedForDedup = [...processed].sort((a, b) => parseDate(a.snapshotDate) - parseDate(b.snapshotDate));
+        // If no "Current" marked data is found, fallback to the latest dated snapshot for the dashboard
+        if (dataStore.currentData.length === 0 && state.latestSnap) {
+            dataStore.currentData = processed.filter(d => d.snapshotDate === state.latestSnap);
+        }
 
-        const latestMap = new Map();
-        sortedForDedup.forEach(row => {
-            const key = `${row.item}_${row.plant}`;
-            latestMap.set(key, row); // Newer data for same item+plant will overwrite
-        });
-
-        dataStore.currentData = Array.from(latestMap.values());
-
-        console.log(`📊 Data Processed: Master(All)=${dataStore.allFilteredData.length}, Current(Deduplicated)=${dataStore.currentData.length}`);
+        console.log(`📊 Data Loaded: Total=${dataStore.allFilteredData.length}, Current(Dashboard)=${dataStore.currentData.length}`);
 
         const ageMaxInput = document.getElementById('filterAgeMax');
         if (ageMaxInput) {
