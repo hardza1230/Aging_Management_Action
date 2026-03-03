@@ -29,7 +29,7 @@ export const headerKeywords = {
     planRemark: ['planning remarks', 'planning remark', 'remark', 'หมายเหตุวางแผน'],
     latestSale: ['ขายล่าสุด', 'last sale', 'latest sale'],
     hasPo: ['มีพีโอ', 'มี พีโอ', 'มี พี โอ', 'มี po', 'มีpo', 'has po'],
-    actionStatus: ['action (วิธีการ)', 'วิธีการ', 'สถานะการจัดการ', 'action status', 'status', 'จัดการ']
+    actionStatus: ['สถานะการจัดการ', 'action status', 'action(วิธีการ)', 'action (วิธีการ)', 'วิธีการ', 'สถานะ', 'จัดการ']
 };
 
 export const DEFAULT_ACTIONS = ["รอตรวจสอบ", "รอเคลียร์ตัวเลข", "รอ Rework", "รอส่งคืน", "รอทำลาย", "รอขายลดราคา", "ดำเนินการแล้ว"];

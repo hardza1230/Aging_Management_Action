@@ -49,6 +49,10 @@ export async function fetchGoogleSheet() {
 function buildMap(sr) {
     const allKeys = Object.keys(sr);
     console.log("📋 Sheet headers:", allKeys);
+
+    // Direct column name lookup (exact match first, ignoring trailing spaces)
+    const findExact = (target) => allKeys.find(k => k.trim().toLowerCase() === target.toLowerCase()) || null;
+
     const map = {
         overPo: findHeader(sr, headerKeywords.overPo),
         stock: findHeader(sr, headerKeywords.stock),
@@ -65,18 +69,19 @@ function buildMap(sr) {
         latestSale: findHeader(sr, headerKeywords.latestSale),
         hasPo: findHeader(sr, headerKeywords.hasPo),
         snapshotDate: findHeader(sr, ['snapshot date', 'วันที่ดึงข้อมูล', 'วันที่', 'snapshot']),
-        actionStatus: findHeader(sr, headerKeywords.actionStatus)
+        // Primary: สถานะการจัดการ (management status — what we want to inherit)
+        actionStatus: findExact('สถานะการจัดการ') || findHeader(sr, ['สถานะการจัดการ', 'action status']),
+        // Secondary: Action (วิธีการ) — action method column (keep separate)
+        actionMethod: findExact('Action (วิธีการ)') || findHeader(sr, ['action (วิธีการ)', 'วิธีการ'])
     };
-    console.log("📍 Column map:", map);
-    if (!map.actionStatus) {
-        console.warn("⚠️ actionStatus NOT MATCHED. Potential candidates:");
-        allKeys.forEach(k => {
-            const kn = k.toLowerCase();
-            if (kn.includes('สถานะ') || kn.includes('action') || kn.includes('status') || kn.includes('จัดการ')) {
-                console.warn(`   → "${k}"`);
-            }
-        });
+
+    // Fallback: if no สถานะการจัดการ found, use actionMethod as status source
+    if (!map.actionStatus && map.actionMethod) {
+        console.warn("⚠️ 'สถานะการจัดการ' not found, falling back to 'Action (วิธีการ)'");
+        map.actionStatus = map.actionMethod;
     }
+
+    console.log("📍 Column map → actionStatus:", map.actionStatus, "| actionMethod:", map.actionMethod);
     return map;
 }
 
@@ -116,8 +121,16 @@ function parseRows(rawData, map, defaultSnapshot = 'Current') {
         const itemVal = String(row[map.item] || '-').trim();
         const plantVal = (map.plant && row[map.plant] ? String(row[map.plant]) : '-').trim();
         const rowId = `${itemVal}|${plantVal}|${snapVal}`;
-        const sheetStatus = (map.actionStatus && row[map.actionStatus])
+
+        // สถานะการจัดการ = official management status (primary)
+        const statusOfficial = (map.actionStatus && row[map.actionStatus])
             ? String(row[map.actionStatus]).trim() : '';
+        // Action (วิธีการ) = action method (secondary, for display only)
+        const statusMethod = (map.actionMethod && row[map.actionMethod])
+            ? String(row[map.actionMethod]).trim() : '';
+
+        // Use official status as main status; fall back to method if empty
+        const sheetStatus = statusOfficial || statusMethod;
 
         rows.push({
             _id: rowId,
@@ -176,6 +189,11 @@ export function processData(masterRawData, currentRawData = []) {
                 .forEach(row => {
                     if (row.status && row.status !== '-') {
                         historyStatusMap[`${row.item}|${row.plant}`] = row.status;
+                        // Auto-register any unknown status values into dropdown options
+                        if (!dataStore.actionOptions.includes(row.status)) {
+                            dataStore.actionOptions.push(row.status);
+                            console.log(`✨ Auto-registered status from sheet: "${row.status}"`);
+                        }
                     }
                 });
 
