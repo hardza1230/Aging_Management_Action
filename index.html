@@ -243,9 +243,10 @@
                 <div class="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-[75vh]">
                     <div class="p-4 bg-slate-50 border-b flex justify-between items-center">
                         <h4 class="font-bold text-slate-700 uppercase text-sm">อัปเดตสถานะการจัดการสต็อกส่วนเกิน</h4>
-                        <button onclick="exportToCSV()"
-                            class="text-xs bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">ส่งออก
-                            Excel</button>
+                        <button id="btnSaveAll" onclick="saveAllVisibleActions()"
+                            class="text-xs bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 shadow-sm font-bold transition">
+                            💾 บันทึกที่เลือกทั้งหมด
+                        </button>
                     </div>
                     <div class="overflow-y-auto flex-1 relative">
                         <table class="w-full text-left text-sm whitespace-nowrap">

@@ -62,6 +62,7 @@ function setupEventListeners() {
     window.exportToCSV = exportToCSV;
     window.addNewAction = addNewAction;
     window.removeActionOption = removeActionOption;
+    window.saveAllVisibleActions = saveAllVisibleActions;
 }
 
 
@@ -143,6 +144,41 @@ document.body.addEventListener('click', async (e) => {
         }
     }
 });
+
+async function saveAllVisibleActions() {
+    const btns = document.querySelectorAll('.save-action-btn');
+    if (btns.length === 0) return alert('ไม่มีข้อมูลที่สามารถบันทึกได้ในหน้านี้');
+
+    if (!confirm(`ต้องการบันทึกสถานะทั้งหมด ${btns.length} รายการในหน้านี้ลง Google Sheets หรือไม่?`)) return;
+
+    const mainBtn = document.getElementById('btnSaveAll');
+    const originalText = mainBtn.innerHTML;
+    mainBtn.disabled = true;
+    mainBtn.innerHTML = '⏳ กำลังบันทึก...';
+
+    // บันทึกที่ละบรรทัด (ขนานกัน)
+    const promises = Array.from(btns).map(btn => {
+        const id = btn.getAttribute('data-id');
+        const select = document.querySelector(`.action-select[data-id="${id}"]`);
+        const val = select ? select.value : (dataStore.actionStates[id] || "รอตรวจสอบ");
+        const row = dataStore.allFilteredData.find(r => r._id === id);
+
+        // เราเรียก saveActionToSheet โดยตรงเพื่อให้เร็วขึ้น แต่ยังกด click() เพื่อให้เห็น Animation Success ในแต่ละแถว
+        return (async () => {
+            btn.click();
+        })();
+    });
+
+    await Promise.all(promises);
+
+    setTimeout(() => {
+        mainBtn.innerHTML = `✅ บันทึกสำเร็จแล้ว`;
+        setTimeout(() => {
+            mainBtn.innerHTML = originalText;
+            mainBtn.disabled = false;
+        }, 3000);
+    }, 1500);
+}
 
 // Tab Switcher
 function switchTab(tabId, btn) {

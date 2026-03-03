@@ -143,13 +143,13 @@ export function renderTable() {
 
         tbody.insertAdjacentHTML('beforeend', `
             <tr id="tr-${row._id}" class="${trClass}">
-                <td class="p-3 border-r border-slate-100 min-w-[160px]">
+                <td class="p-3 border-r border-slate-100 min-w-[200px]">
                     <div class="flex gap-2 items-center">
-                        <select class="action-select text-xs border border-slate-300 rounded p-1.5 flex-1 bg-white font-semibold outline-none" 
+                        <select class="action-select text-[11px] border border-slate-300 rounded p-1.5 flex-1 min-w-0 bg-white font-semibold outline-none" 
                                 data-id="${row._id}" style="color: ${getActionColor(currAction)}">
                             ${optionsHtml}
                         </select>
-                        <button class="save-action-btn bg-indigo-500 hover:bg-indigo-600 text-white text-[10px] px-2 py-1.5 rounded shadow-sm transition-colors"
+                        <button class="save-action-btn bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] px-2 py-1.5 rounded shadow-sm transition-colors shrink-0 font-bold"
                                 data-id="${row._id}">
                             Save
                         </button>
