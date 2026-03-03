@@ -126,19 +126,43 @@ export function processData(rawData) {
             }
         });
 
-        // Find latest snapshot date
+        // Find latest snapshot date — use Date-aware sort so non-ISO formats work correctly
         const uniqueDates = [...new Set(processed.map(d => d.snapshotDate))].filter(d => d && d !== '-');
         if (uniqueDates.length > 0) {
-            // Simple sort - assumes YYYY-MM-DD or comparable string format. 
-            // If they use Thai date, this might need refinement, but usually they use ISO or standard strings in Sheets.
-            state.latestSnap = uniqueDates.sort().reverse()[0];
-            console.log("📅 Latest Snapshot Detected:", state.latestSnap);
+            const parseDate = (s) => {
+                // Try direct parse first (ISO / standard)
+                let d = new Date(s);
+                if (!isNaN(d)) return d;
+                // Try DD/MM/YYYY or DD-MM-YYYY
+                const parts = s.split(/[\/\-\.]/);
+                if (parts.length === 3) {
+                    let [a, b, c] = parts.map(Number);
+                    // If year looks like Buddhist Era (> 2500), subtract 543
+                    if (c > 2500) c -= 543;
+                    d = new Date(c, b - 1, a);
+                }
+                if (s && (s.toLowerCase().includes('current') || s.includes('ล่าสุด'))) return new Date(8640000000000000);
+                return isNaN(d) ? new Date(0) : d;
+            };
+            uniqueDates.sort((a, b) => parseDate(a) - parseDate(b));
+            state.latestSnap = uniqueDates[uniqueDates.length - 1];
+            dataStore.snapDates = uniqueDates; // Store all for progress tab
+            console.log("📅 Snapshot dates found:", uniqueDates, "→ Latest:", state.latestSnap);
         }
 
         // Save synchronized actions to localForage
         try { await localforage.setItem('inventoryActions', dataStore.actionStates); } catch (e) { }
 
+        // Separate "Current" rows for the dashboard while keeping allFilteredData as the full set (Master)
         dataStore.allFilteredData = processed;
+        dataStore.currentData = processed.filter(d => String(d.snapshotDate).toLowerCase().includes('current') || String(d.snapshotDate).includes('ล่าสุด'));
+
+        // If no "Current" marked data is found, fallback to the latest dated snapshot for the dashboard
+        if (dataStore.currentData.length === 0 && state.latestSnap) {
+            dataStore.currentData = processed.filter(d => d.snapshotDate === state.latestSnap);
+        }
+
+        console.log(`📊 Data Loaded: Total=${dataStore.allFilteredData.length}, Current(Dashboard)=${dataStore.currentData.length}`);
 
         const ageMaxInput = document.getElementById('filterAgeMax');
         if (ageMaxInput) {

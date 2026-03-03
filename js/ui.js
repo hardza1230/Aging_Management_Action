@@ -2,7 +2,8 @@ import { state, dataStore, getActionColor } from './state.js';
 import { updateCharts } from './charts.js';
 
 export function updateDashboard() {
-    dataStore.activeData = dataStore.allFilteredData.filter(row => {
+    // Use currentData for main dashboard to prevent doubling
+    dataStore.activeData = dataStore.currentData.filter(row => {
         const searchStr = `${row.item} ${row.desc} ${row.planRemark}`.toLowerCase();
         const mSearch = !state.search || searchStr.includes(state.search);
         const mPlant = state.plant === 'all' || String(row.plant) === state.plant;
@@ -10,10 +11,7 @@ export function updateDashboard() {
         const mCustomer = state.customer === 'all' || String(row.customer) === state.customer;
         const mAge = row.age >= state.ageMin && row.age <= state.ageMax;
 
-        // Use only latest snapshot for main dashboard to prevent doubling
-        const mSnap = !state.latestSnap || row.snapshotDate === state.latestSnap;
-
-        return mSearch && mPlant && mSaleman && mCustomer && mAge && mSnap;
+        return mSearch && mPlant && mSaleman && mCustomer && mAge;
     });
 
     let reasonMap = {}, salesmanMap = {};
@@ -72,39 +70,53 @@ export function renderProgressTab() {
     tbody.innerHTML = '';
     decreaseList.innerHTML = '';
 
-    // Group by snapshotDate, but respect current AGE filter
+    // *** IMPORTANT: Use ALL data (not just latestSnap) so we can compare across snapshots ***
+    // Apply only the age filter — NOT the snapshot filter — here.
     let history = {};
-    let itemSnapshotStats = {}; // To find decreases later
+    let itemSnapshotStats = {};
 
     dataStore.allFilteredData.forEach(row => {
-        // Filter by age for trend analysis
         if (row.age < state.ageMin || row.age > state.ageMax) return;
 
         const date = row.snapshotDate || 'No Date';
         if (!history[date]) history[date] = { date, skus: 0, overPo: 0, done: 0 };
         history[date].skus++;
         history[date].overPo += row.overPo;
-        const st = dataStore.actionStates[row._id] || "รอตรวจสอบ";
-        if (st === "ดำเนินการแล้ว") history[date].done++;
+        const st = dataStore.actionStates[row._id] || 'รอตรวจสอบ';
+        if (st === 'ดำเนินการแล้ว') history[date].done++;
 
-        // Item tracking
         if (!itemSnapshotStats[row.item]) itemSnapshotStats[row.item] = {};
         itemSnapshotStats[row.item][date] = (itemSnapshotStats[row.item][date] || 0) + row.overPo;
     });
 
-    const sortedDates = Object.keys(history).sort((a, b) => new Date(a) - new Date(b));
+    // Sort dates chronologically using the same parseDate helper logic
+    const parseDate = (s) => {
+        let d = new Date(s);
+        if (!isNaN(d)) return d;
+        const parts = s.split(/[\/\-\.\s]/);
+        if (parts.length >= 3) {
+            let [a, b, c] = parts.map(Number);
+            if (c > 2500) c -= 543;
+            d = new Date(c, b - 1, a);
+        }
+        if (s && (s.toLowerCase().includes('current') || s.includes('ล่าสุด'))) return new Date(8640000000000000);
+        return isNaN(d) ? new Date(0) : d;
+    };
+
+    const sortedDates = Object.keys(history).sort((a, b) => parseDate(a) - parseDate(b));
+
     if (sortedDates.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 italic">เลือกช่วงอายุสต็อกให้กว้างขึ้นเพื่อดูข้อมูลเทรนด์</td></tr>';
-        decreaseList.innerHTML = '<p class="text-slate-400 text-xs italic text-center py-8">ไม่มีข้อมูลการเปลี่ยนแปลง</p>';
+        decreaseList.innerHTML = '<p class="text-slate-400 text-xs italic text-center py-8">ไม่มีข้อมูล</p>';
         return;
     }
 
+    // --- Snapshot comparison table ---
     let prevOver = null;
     sortedDates.forEach(date => {
         const data = history[date];
         const donePct = data.skus ? Math.round((data.done / data.skus) * 100) : 0;
-
-        let diffHtml = '-';
+        let diffHtml = '<span class="text-slate-400 text-xs">-</span>';
         if (prevOver !== null) {
             const diff = data.overPo - prevOver;
             const color = diff <= 0 ? 'text-green-600' : 'text-red-600';
@@ -112,10 +124,10 @@ export function renderProgressTab() {
             diffHtml = `<span class="${color} font-bold">${icon} ${Math.abs(diff).toLocaleString()}</span>`;
         }
         prevOver = data.overPo;
-
+        const isLatest = date === state.latestSnap;
         tbody.insertAdjacentHTML('beforeend', `
-            <tr class="hover:bg-slate-50">
-                <td class="p-3 font-medium">${date}</td>
+            <tr class="hover:bg-slate-50 ${isLatest ? 'ring-2 ring-inset ring-indigo-300 bg-indigo-50' : ''}">
+                <td class="p-3 font-medium">${date}${isLatest ? ' <span class="text-[10px] text-indigo-500 font-bold bg-indigo-100 px-1 rounded">ล่าสุด</span>' : ''}</td>
                 <td class="p-3 text-right">${data.skus.toLocaleString()}</td>
                 <td class="p-3 text-right font-bold text-red-600">${data.overPo.toLocaleString()}</td>
                 <td class="p-3 text-right font-bold text-green-600">${donePct}%</td>
@@ -124,42 +136,46 @@ export function renderProgressTab() {
         `);
     });
 
-    // Handle Notable Decreases (Compare last 2 snapshots if available)
+    // --- Notable Decreases ---
     if (sortedDates.length >= 2) {
         const latestDate = sortedDates[sortedDates.length - 1];
         const previousDate = sortedDates[sortedDates.length - 2];
-
         let changes = [];
         for (let item in itemSnapshotStats) {
-            const lateVal = itemSnapshotStats[item][latestDate] || 0;
-            const prevVal = itemSnapshotStats[item][previousDate] || 0;
+            const lateVal = itemSnapshotStats[item][latestDate] ?? 0;
+            const prevVal = itemSnapshotStats[item][previousDate] ?? 0;
             const diff = lateVal - prevVal;
-            if (diff < 0) {
-                changes.push({ item, diff: Math.abs(diff), prevVal, lateVal });
-            }
+            if (diff < 0) changes.push({ item, diff: Math.abs(diff), prevVal, lateVal });
         }
-
         changes.sort((a, b) => b.diff - a.diff).slice(0, 20).forEach(c => {
-            const pct = Math.round((c.diff / c.prevVal) * 100);
+            const pct = c.prevVal > 0 ? Math.round((c.diff / c.prevVal) * 100) : 0;
+            const cleared = c.lateVal === 0;
             decreaseList.insertAdjacentHTML('beforeend', `
-                <div class="p-3 bg-green-50 rounded-lg border border-green-100 flex justify-between items-start">
-                    <div>
-                        <div class="text-xs font-bold text-slate-700">${c.item}</div>
-                        <div class="text-[10px] text-green-600 font-bold">ลดลง ${c.diff.toLocaleString()} ชิ้น (${pct}%)</div>
+                <div class="p-3 ${cleared ? 'bg-emerald-50 border-emerald-200' : 'bg-green-50 border-green-100'} rounded-lg border flex justify-between items-start gap-2">
+                    <div class="min-w-0">
+                        <div class="text-xs font-bold text-slate-800 truncate">${c.item}</div>
+                        <div class="text-[10px] ${cleared ? 'text-emerald-600' : 'text-green-600'} font-bold mt-0.5">${cleared ? '✅ เคลียร์แล้ว!' : `⬇ ลด ${c.diff.toLocaleString()} ชิ้น (${pct}%)`}</div>
                     </div>
-                    <div class="text-[10px] text-slate-400 text-right">
+                    <div class="text-[9px] text-slate-400 text-right shrink-0">
                         <div>ก่อน: ${c.prevVal.toLocaleString()}</div>
-                        <div>ปัจจุบัน: ${c.lateVal.toLocaleString()}</div>
+                        <div>ล่าสุด: ${c.lateVal.toLocaleString()}</div>
                     </div>
                 </div>
             `);
         });
-        if (changes.length === 0) decreaseList.innerHTML = '<p class="text-slate-400 text-xs italic text-center py-8">ไม่มีรายการที่ลดลงในรอบนี้</p>';
+        if (changes.length === 0) {
+            decreaseList.innerHTML = '<p class="text-slate-400 text-xs italic text-center py-8">ไม่มีรายการที่ลดลงระหว่าง 2 รอบล่าสุด</p>';
+        }
     } else {
-        decreaseList.innerHTML = '<p class="text-slate-400 text-xs italic text-center py-8">ต้องมีอย่างน้อย 2 snapshots เพื่อเปรียบเทียบ</p>';
+        decreaseList.innerHTML = `
+            <div class="text-center py-8 text-slate-400">
+                <div class="text-2xl mb-2">📋</div>
+                <p class="text-xs italic">ยังมีแค่ 1 snapshot ในระบบ</p>
+                <p class="text-[10px] mt-1 text-slate-300">เพิ่มข้อมูลรอบถัดไปเพื่อเปรียบเทียบ</p>
+            </div>`;
     }
 
-    // Update Trend Chart (Simplified)
+    // --- Trend Chart ---
     const ctx = document.getElementById('trendChart')?.getContext('2d');
     if (ctx) {
         if (dataStore.charts.trend) dataStore.charts.trend.destroy();
@@ -171,10 +187,12 @@ export function renderProgressTab() {
                     label: 'ยอดรวมส่วนเกิน',
                     data: sortedDates.map(d => history[d].overPo),
                     borderColor: '#4f46e5',
-                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    backgroundColor: 'rgba(79,70,229,0.08)',
                     borderWidth: 3,
-                    pointRadius: 4,
+                    pointRadius: 5,
                     pointBackgroundColor: '#fff',
+                    pointBorderColor: '#4f46e5',
+                    pointBorderWidth: 2,
                     fill: true,
                     tension: 0.3
                 }]
@@ -184,16 +202,11 @@ export function renderProgressTab() {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
-                    tooltip: { callbacks: { label: (ctx) => ' ' + ctx.raw.toLocaleString() + ' ชิ้น' } },
-                    datalabels: {
-                        display: true,
-                        align: 'top',
-                        font: { weight: 'bold', size: 10 },
-                        formatter: (val) => val.toLocaleString()
-                    }
+                    tooltip: { callbacks: { label: (c) => ' ' + c.raw.toLocaleString() + ' ชิ้น' } },
+                    datalabels: { display: true, align: 'top', font: { weight: 'bold', size: 10 }, formatter: v => v.toLocaleString() }
                 },
                 scales: {
-                    y: { beginAtZero: true, grid: { color: '#f8fafc' } },
+                    y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
                     x: { grid: { display: false } }
                 }
             },
@@ -201,14 +214,11 @@ export function renderProgressTab() {
         });
     }
 
-    // Velocity
+    // --- Velocity ---
     if (sortedDates.length >= 2) {
-        const firstDate = sortedDates[0];
-        const lastDate = sortedDates[sortedDates.length - 1];
-        const firstVal = history[firstDate].overPo;
-        const lastVal = history[lastDate].overPo;
-        const totalDrop = firstVal - lastVal;
-        const v = firstVal ? Math.round((totalDrop / firstVal) * 100) : 0;
+        const firstVal = history[sortedDates[0]].overPo;
+        const lastVal = history[sortedDates[sortedDates.length - 1]].overPo;
+        const v = firstVal ? Math.round(((firstVal - lastVal) / firstVal) * 100) : 0;
         document.getElementById('velocityText').textContent = (v >= 0 ? '↘️ ' : '↗️ ') + Math.abs(v) + '%';
     }
 }
@@ -301,46 +311,49 @@ export function renderTable() {
     sorted.slice((state.page - 1) * state.limit, state.page * state.limit).forEach(row => {
         let ageColor = row.age > 5 ? 'bg-red-100 text-red-700' : row.age > 3 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700';
 
-        let currAction = dataStore.actionStates[row._id] || "รอตรวจสอบ";
-        if (!dataStore.actionOptions.includes(currAction)) currAction = "รอตรวจสอบ";
+        let currAction = dataStore.actionStates[row._id] || 'รอตรวจสอบ';
+        if (!dataStore.actionOptions.includes(currAction)) currAction = 'รอตรวจสอบ';
 
-        const optionsHtml = dataStore.actionOptions.map(opt => `<option value="${opt}" ${currAction === opt ? 'selected' : ''}>${opt}</option>`).join('');
+        const optionsHtml = dataStore.actionOptions.map(opt =>
+            `<option value="${opt}" ${currAction === opt ? 'selected' : ''}>${opt}</option>`
+        ).join('');
 
-        let trClass = 'hover:bg-blue-50 transition';
-        if (currAction === 'ดำเนินการแล้ว') trClass = 'bg-slate-100 opacity-60';
-        else if (currAction !== 'รอตรวจสอบ') trClass = 'bg-yellow-50';
+        let trClass = 'hover:bg-blue-50 transition border-b border-slate-100';
+        if (currAction === 'ดำเนินการแล้ว') trClass = 'bg-slate-100 opacity-60 border-b border-slate-100';
+        else if (currAction !== 'รอตรวจสอบ') trClass = 'bg-yellow-50 border-b border-slate-100';
+
+        // Allowance is a raw string (may be '+10/-10' or number), display as-is
+        const allowanceDisplay = row.allowance ?? '-';
 
         tbody.insertAdjacentHTML('beforeend', `
             <tr id="tr-${row._id}" class="${trClass}">
-                <td class="p-3 border-r border-slate-100 min-w-[200px]">
-                    <div class="flex gap-2 items-center">
-                        <select class="action-select text-[11px] border border-slate-300 rounded p-1.5 flex-1 min-w-0 bg-white font-semibold outline-none" 
+                <td class="p-2 w-[180px]">
+                    <div class="flex flex-col gap-1">
+                        <select class="action-select text-[11px] border border-slate-300 rounded p-1 w-full bg-white font-semibold outline-none"
                                 data-id="${row._id}" style="color: ${getActionColor(currAction)}">
                             ${optionsHtml}
                         </select>
-                        <button class="save-action-btn bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] px-2 py-1.5 rounded shadow-sm transition-colors shrink-0 font-bold"
-                                data-id="${row._id}">
-                            Save
-                        </button>
+                        <button class="save-action-btn bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] px-2 py-1 rounded shadow-sm transition-colors font-bold w-full"
+                                data-id="${row._id}">💾 Save</button>
                     </div>
                 </td>
-                <td class="p-3 text-xs text-slate-500 font-mono">${row.plant}</td>
-                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold ${ageColor}">${row.age} ด.</span></td>
-                <td class="p-3">
-                    <div class="font-bold text-slate-900">${row.item}</div>
-                    <div class="text-[10px] font-bold text-indigo-500 mt-0.5 truncate max-w-[250px]" title="สาเหตุ: ${row.reason}">${row.reason}</div>
-                    <div class="text-[10px] text-slate-500 truncate max-w-[250px] mt-0.5" title="${row.desc}">${row.desc}</div>
-                    ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-600 truncate max-w-[250px] mt-0.5" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
-                    <div class="text-[10px] text-slate-400 mt-1">ขายล่าสุด: ${row.latestSale || '-'}</div>
+                <td class="p-2 text-xs text-slate-500 font-mono align-top">${row.plant}</td>
+                <td class="p-2 align-top"><span class="px-2 py-1 rounded text-xs font-bold ${ageColor}">${row.age}ด.</span></td>
+                <td class="p-2 align-top max-w-[280px]">
+                    <div class="font-bold text-slate-900 text-sm leading-tight">${row.item} ${row.missingData ? '<span class="text-red-400 text-[10px]">⚠</span>' : ''}</div>
+                    <div class="text-[11px] text-slate-500 truncate mt-0.5" title="${row.desc}">${row.desc}</div>
+                    <div class="text-[10px] text-indigo-600 font-semibold mt-1 truncate" title="${row.reason}">📌 ${row.reason}</div>
+                    ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-500 truncate mt-0.5" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
+                    <div class="text-[10px] text-slate-400 mt-1">🗓 ขายล่าสุด: <span class="font-medium text-slate-500">${row.latestSale || '-'}</span></div>
                 </td>
-                <td class="p-3 text-right font-medium text-slate-600">${row.allowance}</td>
-                <td class="p-3 text-xs">${row.saleman}</td>
-                <td class="p-3 text-right text-red-600 font-bold">${row.overPo.toLocaleString()}</td>
+                <td class="p-2 text-right text-xs text-orange-600 font-medium align-top whitespace-nowrap">${allowanceDisplay}</td>
+                <td class="p-2 text-xs text-slate-600 align-top">${row.saleman}</td>
+                <td class="p-2 text-right text-red-600 font-bold align-top">${row.overPo.toLocaleString()}</td>
             </tr>
         `);
     });
 
-    document.getElementById('pageInfo').textContent = `หน้า ${state.page} / ${maxPage}`;
+    document.getElementById('pageInfo').textContent = `หน้า ${state.page} / ${maxPage} (${sorted.length} รายการ)`;
     document.getElementById('btnPrevPage').disabled = state.page === 1;
     document.getElementById('btnNextPage').disabled = state.page === maxPage || maxPage === 0;
 }

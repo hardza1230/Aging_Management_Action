@@ -24,21 +24,31 @@ This document tracks specific problems reported by users and the solutions imple
 - **Requirement**: Mapping and displaying the "Latest Sale" (ขายล่าสุด) column in the table.
 - **Solution Implementation**: Added `latestSale` keywords to `state.js` and included the column in the `Action Management` table.
 
-### 5. Executive Dashboard Redesign
-- **Requirement**: Overhaul KPI cards and add advanced chart features (Legend %, Connector lines, Data labels).
+### 6. Stock Doubling & Latest Snapshot Filter
+- **Problem**: When loading multiple snapshots for history, the Dashboard KPIs (Total Stock, Over PO) were doubling or tripling because they summed all snapshots.
+- **Solution Implementation**: Added `latestSnap` detection in `api.js` using robust date parsing (supporting Thai years). The main dashboard and Action Management now filter data to show only the most recent snapshot by default.
+
+### 7. Missing "Notable Decreases" (Items cleared)
+- **Requirement**: Users want to see which items have been cleared or reduced significantly between snapshots.
 - **Solution Implementation**: 
-    - Replaced old KPI cards with: SKU Count, Total Stock (Excess), With PO, and Over PO.
-    - Updated Donut Chart to show percentages in legends.
-    - Enabled DataLabels for Bar and Donut charts.
-    - Added a Toggle Button to switch Reason chart between "Cases" and "Item Quantity".
-    - Removed "Save All Visible Actions" button as requested.
-    - Improved Reason chart spacing and Indigo color scheme.
+    - Implemented "Notable Decreases" calculation by comparing the last two snapshots.
+    - Added ✅ visual indicator for items that reached 0 stock in the latest snapshot.
+    - Updated `renderProgressTab` to use full historical data (ignoring filters) for trend accuracy.
+
+### 8. Action Management Table Column Layout
+- **Requirement**: High-density table focusing on key information in fewer columns.
+- **Solution Implementation**: 
+    - Merged `Item`, `Description`, `Reason`, `Remarks`, and `Latest Sale` into a single "Item Info" column.
+    - Fixed formatting for `Allowance` to support text strings like "+10/-10".
+    - Added "💾 Save" button inside each row for individual confirmation.
+    - Defaulted age range filter to 4+ months to focus on critical cases.
 
 ## 📅 Log History
 
-| Date | User Request | Status | Resolution |
-| :--- | :--- | :--- | :--- |
 | 2026-03-03 | ปรับปรุง KPI Cards และ Dashboard | ✅ Updated | เปลี่ยนชุด KPI, เพิ่ม Data Label, Legend %, และปุ่มสลับหน่วย |
 | 2026-03-03 | แสดงคอลัมน์ "ขายล่าสุด" | ✅ Added | แมพข้อมูลขายล่าสุดลงตาราง Action Management |
 | 2026-03-03 | เอาปุ่มบันทึกทั้งหมดออก | ✅ Removed | นำปุ่ม Save All ออกตามคำขอ |
-| 2026-03-03 | ข้อมูลหน้า Dashobard หาย | ✅ Fixed | ปรับปรุง findHeader ให้รองรับสระและวรรณยุกต์ไทย และ Normalization ข้อมูลเลข |
+| 2026-03-03 | ข้อมูลหน้า Dashobard หาย | ✅ Fixed | ปรับปรุง findHeader ให้รองรับสระและวรรณยุกต์ไทย |
+| 2026-03-03 | Stock เบิ้ล & Progress ไม่ขึ้น | ✅ Fixed | เพิ่ม Latest Snapshot filter และระบบเปรียบเทียบประวัติข้ามชุดข้อมูล |
+| 2026-03-03 | ปรับ Layout ตาราง Action | ✅ Redesigned | รวมคอลัมน์ข้อมูลเป็น Item Info ชุดเดียว และแก้บั๊กคอลัมน์ค่าเผื่อ |
+

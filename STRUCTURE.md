@@ -1,4 +1,4 @@
-# Inventory Over-PO Analyzer (v8) - Collaborative Edition
+# Inventory Over-PO Analyzer (v8.5) - Progress Tracking Edition
 
 Project structure and logic mapping to ensure consistency and prevent AI hallucination.
 
@@ -9,20 +9,21 @@ Project structure and logic mapping to ensure consistency and prevent AI halluci
 - `index.html`: Main UI entry point (Clean HTML, no logic).
 - `css/style.css`: All styling (Vanilla CSS + Tailwind utilities).
 - `js/`: Application logic using **ES Modules**.
-  - `state.js`: Constants, keywords, and `dataStore`.
+  - `state.js`: Constants, keywords, and `dataStore` (includes `latestSnap` detection).
   - `utils.js`: Helper functions (parsing, dates, modals).
-  - `api.js`: Data fetching (Sheets) and **Manual Action Sync**.
-  - `charts.js`: Chart.js configurations.
-  - `ui.js`: DOM rendering for tables and dashboards.
+  - `api.js`: Data fetching (Sheets) and **Historical Snapshot Management**.
+  - `charts.js`: Chart.js configurations + Trend line chart.
+  - `ui.js`: DOM rendering for tables, dashboards, and **Notable Decreases**.
   - `app.js`: Event listeners and orchestration.
 
 ## 🚀 Key Features
 
 1. **Google Sheets Central Source**: Fetches live data from a published Google Sheet CSV on startup.
-2. **Collaborative Action Status (Manual Save)**: Team-wide status sync. Users must click "Save" or "Save All" to push data to Google Sheets via Apps Script.
-3. **Enhanced Header Mapping**: Keyword matching for "Action (วิธีการ)" and "Snapshot Date".
-4. **Data Accuracy**: Uses `rowId`, `Snapshot Date`, and `Item` for precise row matching on the server.
-5. **ES Modules & Clean UI**: Modularized logic for maintenance; TailwindCSS for premium aesthetic.
+2. **Progress Tracking Tab**: Analyzes historical trends across different snapshots. Automatically detects "Notable Decreases" (items cleared between snapshots).
+3. **Latest Snapshot Intelligence**: The main dashboard and action management tabs automatically filter to the most recent data to prevent total doubling.
+4. **Collaborative Action Status (Manual Save)**: Team-wide status sync. Users must click "Save" to push data to Google Sheets via Apps Script.
+5. **Enhanced Header Mapping**: Keyword matching for "Action (วิธีการ)", "Snapshot Date", and "ขายล่าสุด".
+6. **High-Density Action Table**: Merged columns (Item Info / Reason / Latest Sale) for a streamlined review process.
 
 ## 🛠 Tech Stack
 

@@ -51,9 +51,11 @@ export function getActionColor(actionStr) {
 
 export const dataStore = {
     allFilteredData: [],
+    currentData: [],
     activeData: [],
     actionStates: {},
     actionOptions: [...DEFAULT_ACTIONS],
+    snapDates: [],   // All unique snapshot dates, sorted oldest→newest
     charts: {}
 };
 
