@@ -2,64 +2,63 @@ import { state, dataStore, getActionColor } from './state.js';
 import { updateCharts } from './charts.js';
 
 export function updateDashboard() {
-    // Use currentData for main dashboard to prevent doubling
-    dataStore.activeData = dataStore.currentData.filter(row => {
-        const searchStr = `${row.item} ${row.desc} ${row.planRemark}`.toLowerCase();
-        const mSearch = !state.search || searchStr.includes(state.search);
-        const mPlant = state.plant === 'all' || String(row.plant) === state.plant;
-        const mSaleman = state.saleman === 'all' || String(row.saleman) === state.saleman;
-        const mCustomer = state.customer === 'all' || String(row.customer) === state.customer;
-        const mAge = row.age >= state.ageMin && row.age <= state.ageMax;
+    try {
+        dataStore.activeData = dataStore.currentData.filter(row => {
+            const searchStr = `${row.item} ${row.desc} ${row.planRemark}`.toLowerCase();
+            const mSearch = !state.search || searchStr.includes(state.search);
+            const mPlant = state.plant === 'all' || String(row.plant) === state.plant;
+            const mSaleman = state.saleman === 'all' || String(row.saleman) === state.saleman;
+            const mCustomer = state.customer === 'all' || String(row.customer) === state.customer;
+            const mAge = row.age >= state.ageMin && row.age <= state.ageMax;
 
-        return mSearch && mPlant && mSaleman && mCustomer && mAge;
-    });
+            return mSearch && mPlant && mSaleman && mCustomer && mAge;
+        });
 
-    let reasonMap = {}, salesmanMap = {};
-    let ageBuckets = { '1 เดือน': 0, '2 เดือน': 0, '3 เดือน': 0, '4 เดือน': 0, '5 เดือน': 0, '6 เดือน': 0, '7 เดือน': 0, '8 เดือน': 0, '9 เดือน': 0, '10 เดือน': 0, '11 เดือน': 0, '12 เดือน': 0, '> 1 ปี': 0 };
-    let actionCounts = {};
-    dataStore.actionOptions.forEach(o => actionCounts[o] = 0);
-    let totalExceed = 0, humanError = 0, deadStock = 0, missingCount = 0;
-    let totalStockQty = 0, totalPoQty = 0, withPoCount = 0;
+        let reasonMap = {}, salesmanMap = {};
+        let ageBuckets = { '1 เดือน': 0, '2 เดือน': 0, '3 เดือน': 0, '4 เดือน': 0, '5 เดือน': 0, '6 เดือน': 0, '7 เดือน': 0, '8 เดือน': 0, '9 เดือน': 0, '10 เดือน': 0, '11 เดือน': 0, '12 เดือน': 0, '> 1 ปี': 0 };
+        let actionCounts = {};
+        dataStore.actionOptions.forEach(o => actionCounts[o] = 0);
+        let totalExceed = 0, totalStockQty = 0, totalPoQty = 0;
 
-    dataStore.activeData.forEach(row => {
-        totalExceed += row.overPo;
-        totalStockQty += row.stock || 0;
-        totalPoQty += row.hasPo || 0;
+        dataStore.activeData.forEach(row => {
+            totalExceed += row.overPo;
+            totalStockQty += row.stock || 0;
+            totalPoQty += row.hasPo || 0;
 
-        // Charts still focus on excess (overPo)
-        reasonMap[row.reason] = (reasonMap[row.reason] || 0) + (state.chartMode === 'qty' ? row.overPo : 1);
-        salesmanMap[row.saleman] = (salesmanMap[row.saleman] || 0) + row.overPo;
+            reasonMap[row.reason] = (reasonMap[row.reason] || 0) + (state.chartMode === 'qty' ? row.overPo : 1);
+            salesmanMap[row.saleman] = (salesmanMap[row.saleman] || 0) + row.overPo;
 
-        if (row.age <= 1) ageBuckets['1 เดือน'] += row.overPo;
-        else if (row.age >= 12) {
-            if (row.age === 12) ageBuckets['12 เดือน'] += row.overPo;
-            else ageBuckets['> 1 ปี'] += row.overPo;
-        } else {
-            ageBuckets[`${row.age} เดือน`] += row.overPo;
-        }
+            if (row.age <= 1) ageBuckets['1 เดือน'] += row.overPo;
+            else if (row.age >= 12) {
+                if (row.age === 12) ageBuckets['12 เดือน'] += row.overPo;
+                else ageBuckets['> 1 ปี'] += row.overPo;
+            } else {
+                ageBuckets[`${row.age} เดือน`] += row.overPo;
+            }
 
-        let st = dataStore.actionStates[row._id] || "รอตรวจสอบ";
-        if (!dataStore.actionOptions.includes(st)) st = "รอตรวจสอบ";
-        actionCounts[st] = (actionCounts[st] || 0) + (state.chartMode === 'qty' ? row.overPo : 1);
-    });
+            let st = dataStore.actionStates[row._id] || "รอตรวจสอบ";
+            if (!dataStore.actionOptions.includes(st)) st = "รอตรวจสอบ";
+            actionCounts[st] = (actionCounts[st] || 0) + (state.chartMode === 'qty' ? row.overPo : 1);
+        });
 
-    const totalSkus = dataStore.activeData.length;
+        const totalSkus = dataStore.activeData.length;
+        const poPct = totalStockQty ? Math.round((totalPoQty / totalStockQty) * 100) : 0;
+        const overPct = totalStockQty ? Math.round((totalExceed / totalStockQty) * 100) : 0;
 
-    // Percentages based on quantity relative to stock
-    const poPct = totalStockQty ? Math.round((totalPoQty / totalStockQty) * 100) : 0;
-    const overPct = totalStockQty ? Math.round((totalExceed / totalStockQty) * 100) : 0;
+        document.getElementById('kpiTotalSkus').textContent = totalSkus.toLocaleString();
+        document.getElementById('kpiTotalStock').textContent = totalStockQty.toLocaleString();
+        document.getElementById('kpiWithPo').innerHTML = `${totalPoQty.toLocaleString()} <span class="text-xs font-normal opacity-70">(${poPct}%)</span>`;
+        document.getElementById('kpiOverPo').innerHTML = `${totalExceed.toLocaleString()} <span class="text-xs font-normal opacity-70">(${overPct}%)</span>`;
 
-    document.getElementById('kpiTotalSkus').textContent = totalSkus.toLocaleString();
-    document.getElementById('kpiTotalStock').textContent = totalStockQty.toLocaleString();
-    document.getElementById('kpiWithPo').innerHTML = `${totalPoQty.toLocaleString()} <span class="text-xs font-normal opacity-70">(${poPct}%)</span>`;
-    document.getElementById('kpiOverPo').innerHTML = `${totalExceed.toLocaleString()} <span class="text-xs font-normal opacity-70">(${overPct}%)</span>`;
-
-    updateProgressUI();
-    updateCharts(reasonMap, ageBuckets, salesmanMap, actionCounts);
-    renderPivotTable();
-    renderFactoryTab();
-    renderProgressTab();
-    renderTable();
+        updateProgressUI();
+        updateCharts(reasonMap, ageBuckets, salesmanMap, actionCounts);
+        renderPivotTable();
+        renderFactoryTab();
+        renderProgressTab();
+        renderTable();
+    } catch (e) {
+        console.error("Dashboard Update Error:", e);
+    }
 }
 
 export function renderProgressTab() {
@@ -414,7 +413,9 @@ export function renderFactoryTab() {
         if (!plantMap[p]) plantMap[p] = { overPo: 0, count: 0, allowance: 0 };
         plantMap[p].overPo += r.overPo;
         plantMap[p].count += 1;
-        plantMap[p].allowance += r.allowance;
+        // Allowance might be a string like "+10/-10" or "-", parse safely
+        const allVal = (typeof r.allowance === 'string') ? parseFloat(r.allowance.replace(/[^0-9.\-]/g, '')) : r.allowance;
+        plantMap[p].allowance += (isNaN(allVal) ? 0 : allVal);
     });
 
     let sortedPlants = Object.entries(plantMap).sort((a, b) => b[1].overPo - a[1].overPo);
