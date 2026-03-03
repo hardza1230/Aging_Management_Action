@@ -1,5 +1,8 @@
 export function parseNum(val) {
-    return parseFloat(String(val).replace(/,/g, '')) || 0;
+    if (val === undefined || val === null || val === '') return 0;
+    // Remove all non-numeric chars except . and -
+    const cleaned = String(val).replace(/[^0-9.\-]/g, '');
+    return parseFloat(cleaned) || 0;
 }
 
 export function calculateAgeMonths(dateStr, ageFallback) {
@@ -24,7 +27,7 @@ export function calculateAgeMonths(dateStr, ageFallback) {
         d = new Date(str);
     }
     if (isNaN(d.getTime())) return fallbackMonths || 1;
-    let months = Math.ceil(((new Date() - d) / (1000 * 60 * 60 * 24)) / 30);
+    let months = Math.floor(((new Date() - d) / (1000 * 60 * 60 * 24)) / 30);
     return isNaN(months) || months < 1 ? 1 : months;
 }
 
@@ -38,8 +41,29 @@ export function findActualHeader(row, keywords) {
 }
 
 export function findHeader(row, kwList) {
-    for (let key of Object.keys(row)) {
-        if (kwList.some(kw => String(key).toLowerCase().includes(kw))) return key;
+    const keys = Object.keys(row);
+    const cleanKws = kwList.map(kw => kw.trim().toLowerCase().replace(/\s/g, ''));
+
+    // 1. Strict Exact Match (Trimmed & Lowercase)
+    for (let key of keys) {
+        const k = String(key).trim().toLowerCase();
+        if (kwList.some(kw => k === kw.trim().toLowerCase())) return key;
+    }
+
+    // 2. Strict Exact Match (No spaces)
+    for (let key of keys) {
+        const k = String(key).trim().toLowerCase().replace(/\s/g, '');
+        if (cleanKws.some(ckw => k === ckw)) return key;
+    }
+
+    // 3. Partial Match (Prefer longer keywords first to avoid 'po' matching 'over po'?) 
+    // Actually we iterate keys first.
+    for (let key of keys) {
+        const k = String(key).trim().toLowerCase().replace(/\s/g, '');
+        // We only return if the keyword is a SIGNIFICANT part or the key contains the keyword uniquely
+        for (let ckw of cleanKws) {
+            if (k.length > 2 && k.includes(ckw)) return key;
+        }
     }
     return null;
 }

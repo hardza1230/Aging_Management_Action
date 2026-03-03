@@ -13,8 +13,8 @@ export const state = {
 };
 
 export const headerKeywords = {
-    overPo: ['เกินพีโอ', 'over po', 'เกิน po'],
-    stock: ['สต็อก', 'stock', 'total stock'],
+    overPo: ['เกินพีโอ', 'over po', 'เกิน po', 'เกินpo', 'excess'],
+    stock: ['สต็อก', 'สต๊อก', 'stock', 'total stock', 'คงเหลือ'],
     reason: ['reason', 'สาเหตุ', 'ที่มา'],
     latestProduce: ['ผลิตล่าสุด', 'last produce', 'mfg'],
     age: ['อายุ', 'age'],
@@ -26,7 +26,7 @@ export const headerKeywords = {
     allowance: ['ค่าเผื่อ', 'allowance'],
     planRemark: ['planning remarks', 'planning remark', 'remark', 'หมายเหตุวางแผน'],
     latestSale: ['ขายล่าสุด', 'last sale', 'latest sale'],
-    hasPo: ['มีพีโอ', 'มี po', 'has po'],
+    hasPo: ['มีพีโอ', 'มี po', 'มีpo', 'has po'],
     actionStatus: ['action (วิธีการ)', 'วิธีการ', 'สถานะการจัดการ', 'action status', 'status', 'จัดการ']
 };
 

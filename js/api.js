@@ -65,13 +65,18 @@ export function processData(rawData) {
         planRemark: findHeader(sr, headerKeywords.planRemark),
         latestSale: findHeader(sr, headerKeywords.latestSale),
         hasPo: findHeader(sr, headerKeywords.hasPo),
-        actionStatus: findHeader(sr, headerKeywords.actionStatus),
-        snapshotDate: findHeader(sr, ['snapshot date', 'วันที่ดึงข้อมูล', 'วันที่'])
+        snapshotDate: findHeader(sr, ['snapshot date', 'วันที่ดึงข้อมูล', 'วันที่', 'snapshot'])
     };
+    map.actionStatus = findHeader(sr, headerKeywords.actionStatus);
 
-    if (!map.overPo) {
+    console.log("📍 Column Mapping Results:", map);
+
+    if (!map.overPo || !map.stock) {
         hideLoading();
-        return alert('ไม่พบคอลัมน์ "เกินพีโอ"');
+        const missing = [];
+        if (!map.stock) missing.push('"สต็อก"');
+        if (!map.overPo) missing.push('"เกินพีโอ"');
+        return alert('ไม่พบคอลัมน์ที่จำเป็น: ' + missing.join(' และ ') + '\nกรุณาตรวจสอบชื่อหัวตารางในไฟล์ Excel');
     }
 
     showLoading(70, 'วิเคราะห์ข้อมูล...');
@@ -105,15 +110,15 @@ export function processData(rawData) {
                     overPo: overVal,
                     reason: finalReason,
                     age: ageMonths,
-                    item: row[map.item] || '-',
-                    desc: row[map.desc] || '-',
-                    saleman: row[map.saleman] || '-',
-                    customer: row[map.customer] || '-',
-                    plant: map.plant && row[map.plant] ? row[map.plant] : '-',
+                    item: (row[map.item] || '-').trim(),
+                    desc: (row[map.desc] || '-').trim(),
+                    saleman: (row[map.saleman] || '-').trim(),
+                    customer: (row[map.customer] || '-').trim(),
+                    plant: (map.plant && row[map.plant] ? row[map.plant] : '-').trim(),
                     allowance: map.allowance ? parseNum(row[map.allowance]) : 0,
                     planRemark: map.planRemark && row[map.planRemark] ? String(row[map.planRemark]).trim() : '-',
-                    latestSale: map.latestSale ? row[map.latestSale] : '-',
-                    snapshotDate: map.snapshotDate ? row[map.snapshotDate] : '-',
+                    latestSale: map.latestSale ? String(row[map.latestSale]).trim() : '-',
+                    snapshotDate: map.snapshotDate ? String(row[map.snapshotDate]).trim() : '-',
                     missingData: (!rawDate || !reasonRaw || reasonRaw === '-')
                 });
             }

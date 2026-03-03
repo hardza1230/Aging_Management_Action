@@ -41,4 +41,4 @@ This document tracks specific problems reported by users and the solutions imple
 | 2026-03-03 | ปรับปรุง KPI Cards และ Dashboard | ✅ Updated | เปลี่ยนชุด KPI, เพิ่ม Data Label, Legend %, และปุ่มสลับหน่วย |
 | 2026-03-03 | แสดงคอลัมน์ "ขายล่าสุด" | ✅ Added | แมพข้อมูลขายล่าสุดลงตาราง Action Management |
 | 2026-03-03 | เอาปุ่มบันทึกทั้งหมดออก | ✅ Removed | นำปุ่ม Save All ออกตามคำขอ |
-| 2026-03-03 | ข้อมูลหน้า Dashobard หาย | ✅ Fixed | แก้ไขการแมพคอลัมน์ สต็อก, มีพีโอ, เกินพีโอ ให้ตรงตามชื่อคอลัมน์ใน Sheet |
+| 2026-03-03 | ข้อมูลหน้า Dashobard หาย | ✅ Fixed | ปรับปรุง findHeader ให้รองรับสระและวรรณยุกต์ไทย และ Normalization ข้อมูลเลข |
