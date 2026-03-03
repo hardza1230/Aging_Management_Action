@@ -9,7 +9,11 @@ export function updateDashboard() {
         const mSaleman = state.saleman === 'all' || String(row.saleman) === state.saleman;
         const mCustomer = state.customer === 'all' || String(row.customer) === state.customer;
         const mAge = row.age >= state.ageMin && row.age <= state.ageMax;
-        return mSearch && mPlant && mSaleman && mCustomer && mAge;
+
+        // Use only latest snapshot for main dashboard to prevent doubling
+        const mSnap = !state.latestSnap || row.snapshotDate === state.latestSnap;
+
+        return mSearch && mPlant && mSaleman && mCustomer && mAge && mSnap;
     });
 
     let reasonMap = {}, salesmanMap = {};
@@ -56,28 +60,44 @@ export function updateDashboard() {
     updateCharts(reasonMap, ageBuckets, salesmanMap, actionCounts);
     renderPivotTable();
     renderFactoryTab();
-    renderAnalysisTab(reasonMap);
-    renderProgressTab(); // New
+    renderProgressTab();
     renderTable();
 }
 
 export function renderProgressTab() {
     const tbody = document.getElementById('progressGridBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+    const decreaseList = document.getElementById('notableDecreases');
+    if (!tbody || !decreaseList) return;
 
-    // Group by snapshotDate
+    tbody.innerHTML = '';
+    decreaseList.innerHTML = '';
+
+    // Group by snapshotDate, but respect current AGE filter
     let history = {};
+    let itemSnapshotStats = {}; // To find decreases later
+
     dataStore.allFilteredData.forEach(row => {
+        // Filter by age for trend analysis
+        if (row.age < state.ageMin || row.age > state.ageMax) return;
+
         const date = row.snapshotDate || 'No Date';
         if (!history[date]) history[date] = { date, skus: 0, overPo: 0, done: 0 };
         history[date].skus++;
         history[date].overPo += row.overPo;
         const st = dataStore.actionStates[row._id] || "รอตรวจสอบ";
         if (st === "ดำเนินการแล้ว") history[date].done++;
+
+        // Item tracking
+        if (!itemSnapshotStats[row.item]) itemSnapshotStats[row.item] = {};
+        itemSnapshotStats[row.item][date] = (itemSnapshotStats[row.item][date] || 0) + row.overPo;
     });
 
     const sortedDates = Object.keys(history).sort((a, b) => new Date(a) - new Date(b));
+    if (sortedDates.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 italic">เลือกช่วงอายุสต็อกให้กว้างขึ้นเพื่อดูข้อมูลเทรนด์</td></tr>';
+        decreaseList.innerHTML = '<p class="text-slate-400 text-xs italic text-center py-8">ไม่มีข้อมูลการเปลี่ยนแปลง</p>';
+        return;
+    }
 
     let prevOver = null;
     sortedDates.forEach(date => {
@@ -94,7 +114,7 @@ export function renderProgressTab() {
         prevOver = data.overPo;
 
         tbody.insertAdjacentHTML('beforeend', `
-            <tr>
+            <tr class="hover:bg-slate-50">
                 <td class="p-3 font-medium">${date}</td>
                 <td class="p-3 text-right">${data.skus.toLocaleString()}</td>
                 <td class="p-3 text-right font-bold text-red-600">${data.overPo.toLocaleString()}</td>
@@ -103,6 +123,41 @@ export function renderProgressTab() {
             </tr>
         `);
     });
+
+    // Handle Notable Decreases (Compare last 2 snapshots if available)
+    if (sortedDates.length >= 2) {
+        const latestDate = sortedDates[sortedDates.length - 1];
+        const previousDate = sortedDates[sortedDates.length - 2];
+
+        let changes = [];
+        for (let item in itemSnapshotStats) {
+            const lateVal = itemSnapshotStats[item][latestDate] || 0;
+            const prevVal = itemSnapshotStats[item][previousDate] || 0;
+            const diff = lateVal - prevVal;
+            if (diff < 0) {
+                changes.push({ item, diff: Math.abs(diff), prevVal, lateVal });
+            }
+        }
+
+        changes.sort((a, b) => b.diff - a.diff).slice(0, 20).forEach(c => {
+            const pct = Math.round((c.diff / c.prevVal) * 100);
+            decreaseList.insertAdjacentHTML('beforeend', `
+                <div class="p-3 bg-green-50 rounded-lg border border-green-100 flex justify-between items-start">
+                    <div>
+                        <div class="text-xs font-bold text-slate-700">${c.item}</div>
+                        <div class="text-[10px] text-green-600 font-bold">ลดลง ${c.diff.toLocaleString()} ชิ้น (${pct}%)</div>
+                    </div>
+                    <div class="text-[10px] text-slate-400 text-right">
+                        <div>ก่อน: ${c.prevVal.toLocaleString()}</div>
+                        <div>ปัจจุบัน: ${c.lateVal.toLocaleString()}</div>
+                    </div>
+                </div>
+            `);
+        });
+        if (changes.length === 0) decreaseList.innerHTML = '<p class="text-slate-400 text-xs italic text-center py-8">ไม่มีรายการที่ลดลงในรอบนี้</p>';
+    } else {
+        decreaseList.innerHTML = '<p class="text-slate-400 text-xs italic text-center py-8">ต้องมีอย่างน้อย 2 snapshots เพื่อเปรียบเทียบ</p>';
+    }
 
     // Update Trend Chart (Simplified)
     const ctx = document.getElementById('trendChart')?.getContext('2d');
@@ -113,10 +168,13 @@ export function renderProgressTab() {
             data: {
                 labels: sortedDates,
                 datasets: [{
-                    label: 'ยอดรวมส่วนเกิน (Over PO)',
+                    label: 'ยอดรวมส่วนเกิน',
                     data: sortedDates.map(d => history[d].overPo),
                     borderColor: '#4f46e5',
                     backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#fff',
                     fill: true,
                     tension: 0.3
                 }]
@@ -124,17 +182,34 @@ export function renderProgressTab() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } }
-            }
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => ' ' + ctx.raw.toLocaleString() + ' ชิ้น' } },
+                    datalabels: {
+                        display: true,
+                        align: 'top',
+                        font: { weight: 'bold', size: 10 },
+                        formatter: (val) => val.toLocaleString()
+                    }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#f8fafc' } },
+                    x: { grid: { display: false } }
+                }
+            },
+            plugins: [ChartDataLabels]
         });
     }
 
     // Velocity
     if (sortedDates.length >= 2) {
-        const last = history[sortedDates[sortedDates.length - 1]];
-        const prev = history[sortedDates[sortedDates.length - 2]];
-        const v = prev.overPo ? Math.round(((prev.overPo - last.overPo) / prev.overPo) * 100) : 0;
-        document.getElementById('velocityText').textContent = (v >= 0 ? '+' : '') + v + '%';
+        const firstDate = sortedDates[0];
+        const lastDate = sortedDates[sortedDates.length - 1];
+        const firstVal = history[firstDate].overPo;
+        const lastVal = history[lastDate].overPo;
+        const totalDrop = firstVal - lastVal;
+        const v = firstVal ? Math.round((totalDrop / firstVal) * 100) : 0;
+        document.getElementById('velocityText').textContent = (v >= 0 ? '↘️ ' : '↗️ ') + Math.abs(v) + '%';
     }
 }
 
@@ -251,14 +326,14 @@ export function renderTable() {
                 </td>
                 <td class="p-3 text-xs text-slate-500 font-mono">${row.plant}</td>
                 <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold ${ageColor}">${row.age} ด.</span></td>
-                <td class="p-3 font-medium text-slate-700 truncate max-w-[120px]" title="${row.reason}">${row.reason}</td>
-                <td class="p-3 text-xs text-slate-600">${row.latestSale || '-'}</td>
                 <td class="p-3">
-                    <div class="font-bold text-slate-900">${row.item} ${row.missingData ? '<span class="text-red-500 text-xs" title="ข้อมูลไม่ครบ">⚠️</span>' : ''}</div>
-                    <div class="text-xs text-slate-500 truncate max-w-[200px]" title="${row.desc}">${row.desc}</div>
-                    ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-600 truncate max-w-[200px] mt-0.5" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
+                    <div class="font-bold text-slate-900">${row.item}</div>
+                    <div class="text-[10px] font-bold text-indigo-500 mt-0.5 truncate max-w-[250px]" title="สาเหตุ: ${row.reason}">${row.reason}</div>
+                    <div class="text-[10px] text-slate-500 truncate max-w-[250px] mt-0.5" title="${row.desc}">${row.desc}</div>
+                    ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-600 truncate max-w-[250px] mt-0.5" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
+                    <div class="text-[10px] text-slate-400 mt-1">ขายล่าสุด: ${row.latestSale || '-'}</div>
                 </td>
-                <td class="p-3 text-right font-semibold text-orange-600">${row.allowance.toLocaleString()}</td>
+                <td class="p-3 text-right font-medium text-slate-600">${row.allowance}</td>
                 <td class="p-3 text-xs">${row.saleman}</td>
                 <td class="p-3 text-right text-red-600 font-bold">${row.overPo.toLocaleString()}</td>
             </tr>
@@ -336,7 +411,8 @@ export function renderFactoryTab() {
                     datalabels: { display: true, color: '#475569', anchor: 'end', align: 'top', formatter: (val) => val.toLocaleString() }
                 },
                 onClick: (e, els) => { if (els.length) openModal('Plant: ' + sortedPlants[els[0].index][0], r => r.plant === sortedPlants[els[0].index][0]); }
-            }
+            },
+            plugins: [ChartDataLabels]
         });
     }
 
@@ -354,19 +430,5 @@ export function renderFactoryTab() {
         `;
         tr.onclick = () => openModal(`Plant: ${plant}`, r => r.plant === plant);
         tbody.appendChild(tr);
-    });
-}
-
-export function renderAnalysisTab(reasonMap) {
-    let sortedR = Object.entries(reasonMap).sort((a, b) => b[1] - a[1]).slice(0, 3);
-    const ul = document.getElementById('analysisTopReasons');
-    if (!ul) return;
-    ul.innerHTML = '';
-    if (sortedR.length === 0) {
-        ul.innerHTML = '<li>ไม่มีข้อมูลสาเหตุในขณะนี้</li>';
-        return;
-    }
-    sortedR.forEach((r, i) => {
-        ul.insertAdjacentHTML('beforeend', `<li><b>อันดับ ${i + 1}:</b> ${r[0]} <span class="text-slate-500">(${r[1].toLocaleString()} รายการ)</span></li>`);
     });
 }

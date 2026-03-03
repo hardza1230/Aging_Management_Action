@@ -182,12 +182,15 @@ async function saveAllVisibleActions() {
 
 // Tab Switcher
 function switchTab(tabId, btn) {
-    ['exec', 'progress', 'action', 'insight', 'factory', 'setup', 'analysis'].forEach(id => document.getElementById(`tab-${id}`)?.classList.add('hidden'));
+    state.currentTab = tabId;
+    ['exec', 'progress', 'action', 'insight', 'factory', 'setup'].forEach(id => document.getElementById(`tab-${id}`)?.classList.add('hidden'));
     document.getElementById(`tab-${tabId}`)?.classList.remove('hidden');
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+
     if (tabId === 'action') renderTable();
     if (tabId === 'progress') renderProgressTab();
+    else updateDashboard(); // Refresh current view
 }
 
 // Other window-bound functions

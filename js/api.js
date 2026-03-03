@@ -117,7 +117,7 @@ export function processData(rawData) {
                     saleman: String(row[map.saleman] || '-').trim(),
                     customer: String(row[map.customer] || '-').trim(),
                     plant: (map.plant && row[map.plant] ? String(row[map.plant]) : '-').trim(),
-                    allowance: map.allowance ? parseNum(row[map.allowance]) : 0,
+                    allowance: map.allowance && row[map.allowance] ? String(row[map.allowance]).trim() : '-',
                     planRemark: map.planRemark && row[map.planRemark] ? String(row[map.planRemark]).trim() : '-',
                     latestSale: map.latestSale ? String(row[map.latestSale]).trim() : '-',
                     snapshotDate: map.snapshotDate ? String(row[map.snapshotDate]).trim() : '-',
@@ -125,6 +125,15 @@ export function processData(rawData) {
                 });
             }
         });
+
+        // Find latest snapshot date
+        const uniqueDates = [...new Set(processed.map(d => d.snapshotDate))].filter(d => d && d !== '-');
+        if (uniqueDates.length > 0) {
+            // Simple sort - assumes YYYY-MM-DD or comparable string format. 
+            // If they use Thai date, this might need refinement, but usually they use ISO or standard strings in Sheets.
+            state.latestSnap = uniqueDates.sort().reverse()[0];
+            console.log("📅 Latest Snapshot Detected:", state.latestSnap);
+        }
 
         // Save synchronized actions to localForage
         try { await localforage.setItem('inventoryActions', dataStore.actionStates); } catch (e) { }
@@ -138,7 +147,7 @@ export function processData(rawData) {
             document.getElementById('filterAgeMin').max = safeMaxAge;
             ageMaxInput.value = safeMaxAge;
             state.ageMax = safeMaxAge;
-            document.getElementById('ageLabel').textContent = `0 - ${safeMaxAge} ด.`;
+            document.getElementById('ageLabel').textContent = `${state.ageMin} - ${safeMaxAge} ด.`;
         }
 
         try {

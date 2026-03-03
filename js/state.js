@@ -3,13 +3,15 @@ export const state = {
     plant: 'all',
     saleman: 'all',
     customer: 'all',
-    ageMin: 0,
+    ageMin: 4,
     ageMax: 120,
     page: 1,
     limit: 30,
     sortBy: 'overPo',
     sortAsc: false,
-    chartMode: 'qty' // 'cases' or 'qty'
+    chartMode: 'qty', // 'cases' or 'qty'
+    latestSnap: null,
+    currentTab: 'exec'
 };
 
 export const headerKeywords = {

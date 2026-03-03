@@ -25,11 +25,12 @@ export function updateCharts(reasonMap, ageBuckets, salesmanMap, actionCounts) {
         data: { labels: actLabels, datasets: [{ data: actData, backgroundColor: actColors, borderWidth: 1 }] },
         options: {
             responsive: true, maintainAspectRatio: false, cutout: '65%',
+            layout: { padding: 30 },
             plugins: {
                 legend: {
                     position: 'bottom',
                     labels: {
-                        boxWidth: 10, font: { size: 9 },
+                        boxWidth: 10, font: { size: 9, weight: 'bold' },
                         generateLabels: (chart) => {
                             const data = chart.data;
                             if (data.labels.length && data.datasets.length) {
@@ -53,12 +54,12 @@ export function updateCharts(reasonMap, ageBuckets, salesmanMap, actionCounts) {
                 tooltip: tfAction,
                 datalabels: {
                     display: true,
-                    color: '#fff',
+                    color: (ctx) => ctx.dataset.backgroundColor[ctx.dataIndex],
                     font: { weight: 'bold', size: 10 },
-                    formatter: (value) => {
-                        const pct = Math.round((value / totalAct) * 100);
-                        return pct > 5 ? pct + '%' : '';
-                    }
+                    anchor: 'end',
+                    align: 'end',
+                    offset: 8,
+                    formatter: (value) => value.toLocaleString()
                 }
             }
         },
@@ -142,6 +143,7 @@ export function updateCharts(reasonMap, ageBuckets, salesmanMap, actionCounts) {
                     openModal('พนักงานขาย: ' + topS[els[0].index][0], r => r.saleman === topS[els[0].index][0]);
                 }
             }
-        }
+        },
+        plugins: [ChartDataLabels]
     });
 }

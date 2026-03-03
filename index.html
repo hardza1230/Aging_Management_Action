@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory Over-PO Analyzer v7 (Google Sheets)</title>
+    <title>Inventory Over-PO Analyzer (Google Sheets)</title>
     <!-- CSS Dependencies -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/style.css">
@@ -44,8 +44,7 @@
                     <thead class="bg-slate-100 text-slate-600 uppercase text-xs sticky top-0 shadow-sm z-10">
                         <tr>
                             <th class="p-2 font-semibold">Plant</th>
-                            <th class="p-2 font-semibold">Item / Desc / Remarks</th>
-                            <th class="p-2 font-semibold">Reason</th>
+                            <th class="p-2 font-semibold">Item / Desc / Remarks / Reason / Latest Sale</th>
                             <th class="p-2 font-semibold">Salesman</th>
                             <th class="p-2 font-semibold text-right">อายุ (ด.)</th>
                             <th class="p-2 font-semibold text-right text-orange-600">ค่าเผื่อ</th>
@@ -55,31 +54,6 @@
                     </thead>
                     <tbody id="modalTableBody" class="divide-y divide-slate-100"></tbody>
                 </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Summary Modal -->
-    <div id="summaryModal"
-        class="hidden fixed inset-0 bg-slate-900 bg-opacity-80 z-50 flex justify-center items-center p-4 backdrop-blur-sm">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-            <div class="p-4 border-b flex justify-between items-center bg-indigo-50 rounded-t-xl">
-                <h3 class="text-lg font-bold text-indigo-800 flex items-center gap-2">📋 สรุปรายงานผู้บริหาร</h3>
-                <button onclick="closeModal('summaryModal')"
-                    class="text-slate-400 hover:text-red-500 font-bold text-xl">&times;</button>
-            </div>
-            <div class="p-6 overflow-auto flex-1">
-                <textarea id="summaryTextarea"
-                    class="w-full h-96 p-4 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    readonly></textarea>
-            </div>
-            <div class="p-4 border-t bg-slate-50 rounded-b-xl flex justify-end gap-3">
-                <button onclick="closeModal('summaryModal')"
-                    class="px-4 py-2 border rounded-lg text-slate-600 hover:bg-slate-100 font-semibold text-sm">ปิด</button>
-                <button onclick="copySummaryReport()"
-                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold text-sm shadow-sm flex items-center gap-2">
-                    คัดลอกข้อความ
-                </button>
             </div>
         </div>
     </div>
@@ -96,7 +70,7 @@
                 Inventory Analysis Tool
             </h1>
             <div class="flex gap-4 items-center">
-                <span class="text-sm text-slate-400">v8.0 (ES Modules)</span>
+                <span class="text-sm text-slate-400">v8.5 (Historical Analysis)</span>
                 <button id="btnRefreshSheets"
                     class="hidden text-xs bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded transition">🔄
                     อัปเดตข้อมูล</button>
@@ -138,10 +112,10 @@
                 <div class="md:col-span-2">
                     <label class="block text-xs font-semibold text-slate-500 mb-1 flex justify-between">
                         <span>ช่วงอายุสต็อก (เดือน)</span>
-                        <span id="ageLabel" class="text-blue-600 font-bold">0 - 120</span>
+                        <span id="ageLabel" class="text-blue-600 font-bold">4 - 120</span>
                     </label>
                     <div class="flex items-center gap-2">
-                        <input type="range" id="filterAgeMin" min="0" max="120" value="0" class="w-1/2">
+                        <input type="range" id="filterAgeMin" min="0" max="120" value="4" class="w-1/2">
                         <input type="range" id="filterAgeMax" min="0" max="120" value="120" class="w-1/2">
                     </div>
                 </div>
@@ -160,19 +134,14 @@
                 <button class="tab-btn whitespace-nowrap" onclick="switchTab('factory', this)">🏭 Factory
                     Analysis</button>
                 <button class="tab-btn whitespace-nowrap" onclick="switchTab('setup', this)">⚙️ Parameter Setup</button>
-                <button class="tab-btn whitespace-nowrap" onclick="switchTab('analysis', this)">💡
-                    บทวิเคราะห์และแนวทาง</button>
             </div>
 
             <!-- TAB 1: Executive Dashboard -->
             <div id="tab-exec" class="space-y-6">
                 <div
                     class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border-l-4 border-indigo-500">
-                    <h2 class="font-bold text-slate-800">ภาพรวมข้อมูลและการจัดการ (Executive Overview)</h2>
-                    <button onclick="showSummaryReport()"
-                        class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-sm transition">
-                        📋 สรุปรายงานผู้บริหาร
-                    </button>
+                    <h2 class="font-bold text-slate-800 border-b pb-2">ภาพรวมข้อมูลและการจัดการ (Executive Overview)
+                    </h2>
                 </div>
 
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -188,13 +157,13 @@
                     </div>
                     <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-green-500 bg-green-50 clickable-card"
                         onclick="openModal('รายการที่มีพีโอ', r => true)">
-                        <p class="text-xs text-green-700 uppercase font-bold">มีพีโอ (ใบ) / %</p>
+                        <p class="text-xs text-green-700 uppercase font-bold text-green-600">มีพีโอ (ใบ) / %</p>
                         <h3 id="kpiWithPo" class="text-2xl font-bold text-green-600">0 <span
                                 class="text-sm font-normal">(0%)</span></h3>
                     </div>
                     <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500 bg-red-50 clickable-card"
                         onclick="openModal('รายการที่เกินพีโอ', r => true)">
-                        <p class="text-xs text-red-700 uppercase font-bold">เกิน PO (ใบ) / %</p>
+                        <p class="text-xs text-red-700 uppercase font-bold text-red-600">เกิน PO (ใบ) / %</p>
                         <h3 id="kpiOverPo" class="text-2xl font-bold text-red-600">0 <span
                                 class="text-sm font-normal">(0%)</span></h3>
                     </div>
@@ -252,7 +221,6 @@
                 <div class="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-[75vh]">
                     <div class="p-4 bg-slate-50 border-b flex justify-between items-center">
                         <h4 class="font-bold text-slate-700 uppercase text-sm">อัปเดตสถานะการจัดการสต็อกส่วนเกิน</h4>
-                        <!-- ปุ่มบันทึกที่เลือกทั้งหมดถูกเอาออกตามคำขอ -->
                     </div>
                     <div class="overflow-y-auto flex-1 relative">
                         <table class="w-full text-left text-sm whitespace-nowrap">
@@ -263,16 +231,9 @@
                                             class="sort-icon" id="sort-plant"></span></th>
                                     <th class="p-3 font-semibold sortable" onclick="handleSort('age')">อายุ <span
                                             class="sort-icon" id="sort-age"></span></th>
-                                    <th class="p-3 font-semibold sortable" onclick="handleSort('reason')">Reason <span
-                                            class="sort-icon" id="sort-reason"></span></th>
-                                    <th class="p-3 font-semibold sortable" onclick="handleSort('latestSale')">ขายล่าสุด
-                                        <span class="sort-icon" id="sort-latestSale"></span>
-                                    </th>
-                                    <th class="p-3 font-semibold sortable" onclick="handleSort('item')">Item / Desc /
-                                        Remarks <span class="sort-icon" id="sort-item"></span></th>
-                                    <th class="p-3 font-semibold text-right text-orange-600 sortable"
-                                        onclick="handleSort('allowance')">ค่าเผื่อ <span class="sort-icon"
-                                            id="sort-allowance"></span></th>
+                                    <th class="p-3 font-semibold sortable" onclick="handleSort('item')">Item Info /
+                                        Reason / Latest Sale <span class="sort-icon" id="sort-item"></span></th>
+                                    <th class="p-3 font-semibold text-right text-orange-600">ค่าเผื่อ</th>
                                     <th class="p-3 font-semibold sortable" onclick="handleSort('saleman')">Saleman <span
                                             class="sort-icon" id="sort-saleman"></span></th>
                                     <th class="p-3 font-semibold text-right sortable text-red-600"
@@ -294,15 +255,14 @@
                 </div>
             </div>
 
-            <!-- Other Tabs (insight, factory, setup, analysis) go here ... (They are identical to previous version but clean) -->
-            <!-- Refer to original HTML structure for the inner content of these tabs -->
+            <!-- TAB 3: Insight -->
             <div id="tab-insight" class="hidden space-y-6">
                 <div class="bg-white p-5 rounded-xl shadow-sm">
                     <h4 class="font-bold text-slate-700 text-sm mb-2">ภาระส่วนเกินแยกตามพนักงานขาย</h4>
                     <div class="chart-container" style="height: 250px;"><canvas id="salesmanChart"></canvas></div>
                 </div>
                 <div class="bg-white p-5 rounded-xl shadow-sm">
-                    <h4 class="font-bold text-slate-700 text-sm mb-4">ตาราง Pivot: พนักงานขาย และ ลูกค้า
+                    <h4 class="font-bold text-slate-700 text-sm mb-4 text-slate-800">ตาราง Pivot: พนักงานขาย และ ลูกค้า
                         (เรียงตามยอดเกิน PO)</h4>
                     <div class="overflow-x-auto border rounded-lg max-h-[500px] overflow-y-auto">
                         <table class="w-full text-left text-sm whitespace-nowrap">
@@ -320,6 +280,7 @@
                 </div>
             </div>
 
+            <!-- TAB 4: Factory -->
             <div id="tab-factory" class="hidden space-y-6">
                 <div class="bg-white p-5 rounded-xl shadow-sm">
                     <h4 class="font-bold text-slate-700 text-sm mb-2">จำนวนเกิน PO แยกตามแพลนต์โรงงาน</h4>
@@ -343,6 +304,7 @@
                 </div>
             </div>
 
+            <!-- TAB 5: Setup -->
             <div id="tab-setup" class="hidden">
                 <div class="bg-white p-6 rounded-xl shadow-sm max-w-2xl mx-auto">
                     <h4 class="font-bold text-slate-700 text-lg mb-2">⚙️ ตั้งค่าตัวเลือก Status Action</h4>
@@ -357,12 +319,12 @@
                     <div class="border rounded-lg overflow-hidden">
                         <ul id="actionSettingsList" class="divide-y divide-slate-100 bg-slate-50"></ul>
                     </div>
-                    <p class="text-xs text-slate-400 mt-4">* สถานะ "รอตรวจสอบ" และ "ดำเนินการแล้ว" เป็นสถานะระบบ
-                        ไม่สามารถลบได้</p>
+                    <p class="text-xs text-slate-400 mt-4 font-semibold italic">* สถานะ "รอตรวจสอบ" และ "ดำเนินการแล้ว"
+                        เป็นสถานะระบบ ไม่สามารถลบได้</p>
                 </div>
             </div>
 
-            <!-- TAB: Progress Tracking -->
+            <!-- TAB 6: Progress Tracking -->
             <div id="tab-progress" class="hidden space-y-6">
                 <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
                     <h3 class="text-lg font-bold text-slate-800 mb-2">📈 การติดตามความคืบหน้าย้อนหลังจาก Snapshot</h3>
@@ -372,172 +334,48 @@
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                        <h4 class="font-bold text-slate-700 text-sm mb-4">แนวโน้มจำนวนเกิน PO (Trend Line)</h4>
-                        <div class="h-64"><canvas id="trendChart"></canvas></div>
-                    </div>
-                    <div
-                        class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center items-center text-center">
-                        <h4 class="font-bold text-slate-700 text-sm mb-4">ความเร็วในการจัดการสต็อก</h4>
-                        <div id="velocityText" class="text-4xl font-black text-indigo-600 mb-2">0%</div>
-                        <p class="text-xs text-slate-500">อัตราการจัดการรายการใหม่เทียบกับของเดิม</p>
-                    </div>
-                </div>
-
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h4 class="font-bold text-slate-700 text-sm mb-4">ตารางเปรียบเทียบราย Snapshot</h4>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
-                                <tr>
-                                    <th class="p-3 font-semibold">Snapshot Date</th>
-                                    <th class="p-3 font-semibold text-right">จำนวน SKU</th>
-                                    <th class="p-3 font-semibold text-right text-red-600">ยอดเกิน PO</th>
-                                    <th class="p-3 font-semibold text-right text-green-600">ดำเนินการแล้ว (%)</th>
-                                    <th class="p-3 font-semibold">สถานะเทียบรอบก่อน</th>
-                                </tr>
-                            </thead>
-                            <tbody id="progressGridBody" class="divide-y divide-slate-100"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB: Progress Tracking -->
-            <div id="tab-progress" class="hidden space-y-6">
-                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
-                    <h3 class="text-lg font-bold text-slate-800 mb-2">📈 การติดตามความคืบหน้าย้อนหลังจาก Snapshot</h3>
-                    <p class="text-sm text-slate-500">เปรียบเทียบแนวโน้มการจัดการสต็อกและสต็อกส่วนเกินในแต่ละช่วงเวลา
-                    </p>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                        <h4 class="font-bold text-slate-700 text-sm mb-4">แนวโน้มจำนวนเกิน PO (Trend Line)</h4>
-                        <div class="h-64"><canvas id="trendChart"></canvas></div>
-                    </div>
-                    <div
-                        class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center items-center text-center">
-                        <h4 class="font-bold text-slate-700 text-sm mb-4">ความเร็วในการจัดการสต็อก</h4>
-                        <div id="velocityText" class="text-4xl font-black text-indigo-600 mb-2">0%</div>
-                        <p class="text-xs text-slate-500">อัตราการจัดการรายการใหม่เทียบกับของเดิม</p>
-                    </div>
-                </div>
-
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h4 class="font-bold text-slate-700 text-sm mb-4">ตารางเปรียบเทียบราย Snapshot</h4>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
-                                <tr>
-                                    <th class="p-3 font-semibold">Snapshot Date</th>
-                                    <th class="p-3 font-semibold text-right">จำนวน SKU</th>
-                                    <th class="p-3 font-semibold text-right text-red-600">ยอดเกิน PO</th>
-                                    <th class="p-3 font-semibold text-right text-green-600">ดำเนินการแล้ว (%)</th>
-                                    <th class="p-3 font-semibold">สถานะเทียบรอบก่อน</th>
-                                </tr>
-                            </thead>
-                            <tbody id="progressGridBody" class="divide-y divide-slate-100"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB: Progress Tracking -->
-            <div id="tab-progress" class="hidden space-y-6">
-                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
-                    <h3 class="text-lg font-bold text-slate-800 mb-2">📈 การติดตามความคืบหน้าย้อนหลังจาก Snapshot</h3>
-                    <p class="text-sm text-slate-500">เปรียบเทียบแนวโน้มการจัดการสต็อกและสต็อกส่วนเกินในแต่ละช่วงเวลา
-                    </p>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                        <h4 class="font-bold text-slate-700 text-sm mb-4">แนวโน้มจำนวนเกิน PO (Trend Line)</h4>
-                        <div class="h-64"><canvas id="trendChart"></canvas></div>
-                    </div>
-                    <div
-                        class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center items-center text-center">
-                        <h4 class="font-bold text-slate-700 text-sm mb-4">ความเร็วในการจัดการสต็อก</h4>
-                        <div id="velocityText" class="text-4xl font-black text-indigo-600 mb-2">0%</div>
-                        <p class="text-xs text-slate-500">อัตราการจัดการรายการใหม่เทียบกับของเดิม</p>
-                    </div>
-                </div>
-
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h4 class="font-bold text-slate-700 text-sm mb-4">ตารางเปรียบเทียบราย Snapshot</h4>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
-                                <tr>
-                                    <th class="p-3 font-semibold">Snapshot Date</th>
-                                    <th class="p-3 font-semibold text-right">จำนวน SKU</th>
-                                    <th class="p-3 font-semibold text-right text-red-600">ยอดเกิน PO</th>
-                                    <th class="p-3 font-semibold text-right text-green-600">ดำเนินการแล้ว (%)</th>
-                                    <th class="p-3 font-semibold">สถานะเทียบรอบก่อน</th>
-                                </tr>
-                            </thead>
-                            <tbody id="progressGridBody" class="divide-y divide-slate-100"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB: Progress Tracking -->
-            <div id="tab-progress" class="hidden space-y-6">
-                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
-                    <h3 class="text-lg font-bold text-slate-800 mb-2">📈 การติดตามความคืบหน้าย้อนหลังจาก Snapshot</h3>
-                    <p class="text-sm text-slate-500">เปรียบเทียบแนวโน้มการจัดการสต็อกและสต็อกส่วนเกินในแต่ละช่วงเวลา
-                    </p>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                        <h4 class="font-bold text-slate-700 text-sm mb-4">แนวโน้มจำนวนเกิน PO (Trend Line)</h4>
-                        <div class="h-64"><canvas id="trendChart"></canvas></div>
-                    </div>
-                    <div
-                        class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center items-center text-center">
-                        <h4 class="font-bold text-slate-700 text-sm mb-4">ความเร็วในการจัดการสต็อก</h4>
-                        <div id="velocityText" class="text-4xl font-black text-indigo-600 mb-2">0%</div>
-                        <p class="text-xs text-slate-500">อัตราการจัดการรายการใหม่เทียบกับของเดิม</p>
-                    </div>
-                </div>
-
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h4 class="font-bold text-slate-700 text-sm mb-4">ตารางเปรียบเทียบราย Snapshot</h4>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
-                                <tr>
-                                    <th class="p-3 font-semibold">Snapshot Date</th>
-                                    <th class="p-3 font-semibold text-right">จำนวน SKU</th>
-                                    <th class="p-3 font-semibold text-right text-red-600">ยอดเกิน PO</th>
-                                    <th class="p-3 font-semibold text-right text-green-600">ดำเนินการแล้ว (%)</th>
-                                    <th class="p-3 font-semibold">สถานะเทียบรอบก่อน</th>
-                                </tr>
-                            </thead>
-                            <tbody id="progressGridBody" class="divide-y divide-slate-100"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div id="tab-analysis" class="hidden space-y-6">
-                <div class="bg-white p-6 rounded-xl shadow-sm">
-                    <h3 class="text-xl font-bold text-slate-800 mb-4 border-b pb-2">บทวิเคราะห์สาเหตุและแนวทางการจัดการ
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-red-50 p-5 rounded-lg border border-red-100">
-                            <h4 class="font-bold text-red-700 text-lg mb-3">⚠️ 3 สาเหตุหลักที่พบมากที่สุด</h4>
-                            <ul id="analysisTopReasons"
-                                class="list-disc list-inside text-sm text-slate-700 space-y-2 ml-2"></ul>
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="font-bold text-slate-700 text-sm">แนวโน้มจำนวนเกิน PO (Trend Line)</h4>
+                            <span
+                                class="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">โฟกัส
+                                4 เดือนขึ้นไป</span>
                         </div>
-                        <div class="bg-blue-50 p-5 rounded-lg border border-blue-100">
-                            <h4 class="font-bold text-blue-700 text-lg mb-3">📈 การวัดผลความสำเร็จ (KPIs)</h4>
-                            <ul class="list-disc list-inside text-sm text-slate-700 space-y-2 ml-2">
-                                <li><b>ลดปริมาณ Dead Stock:</b> สินค้าอายุ > 5 เดือน ต้องลดลง 50%</li>
-                                <li><b>Action Progress:</b> ต้องระบุสถานะครบ 100%</li>
-                            </ul>
+                        <div class="h-64"><canvas id="trendChart"></canvas></div>
+                    </div>
+                    <div
+                        class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center items-center text-center">
+                        <h4 class="font-bold text-slate-700 text-sm mb-4">ความเร็วในการจัดการสต็อก</h4>
+                        <div id="velocityText" class="text-4xl font-black text-indigo-600 mb-2">0%</div>
+                        <p class="text-xs text-slate-500 mt-2">อัตราการลดลงของยอด Over PO ตั้งแต่จุดเริ่ม</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h4 class="font-bold text-slate-700 text-sm mb-4">ตารางเปรียบเทียบราย Snapshot</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
+                                    <tr>
+                                        <th class="p-3 font-semibold">Snapshot Date</th>
+                                        <th class="p-3 font-semibold text-right">จำนวน SKU</th>
+                                        <th class="p-3 font-semibold text-right text-red-600">ยอดเกิน PO</th>
+                                        <th class="p-3 font-semibold text-right text-green-600">ดำเนินการแล้ว (%)</th>
+                                        <th class="p-3 font-semibold">สถานะเทียบรอบก่อน</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="progressGridBody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
+                        <h4 class="font-bold text-slate-700 text-sm mb-4 flex items-center gap-2">🚩
+                            รายการที่ลดลงอย่างมีนัยสำคัญ
+                            <span class="text-[10px] text-slate-400 font-normal">(Top 20 Items Cleared)</span>
+                        </h4>
+                        <div id="notableDecreases" class="space-y-3 overflow-y-auto max-h-[400px] flex-1 pr-2">
+                            <p class="text-slate-400 text-xs italic text-center py-8">กำลังประมวลผลความเปลี่ยนแปลง...
+                            </p>
                         </div>
                     </div>
                 </div>
