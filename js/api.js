@@ -98,7 +98,8 @@ export function processData(rawData) {
                     let finalReason = reasonRaw || 'รอข้อมูลวางแผน';
                     if (finalReason === '-' || finalReason === '') finalReason = 'รอข้อมูลวางแผน';
 
-                    const rowId = `row_${i}_${row[map.item] || i}`;
+                    const snapshotVal = map.snapshotDate ? String(row[map.snapshotDate]).trim() : '-';
+                    const rowId = `${String(row[map.item] || '').trim()}|${(map.plant && row[map.plant] ? String(row[map.plant]) : '-').trim()}|${snapshotVal}`;
                     const sheetStatus = map.actionStatus && row[map.actionStatus] ? String(row[map.actionStatus]).trim() : '';
                     if (sheetStatus) dataStore.actionStates[rowId] = sheetStatus;
 
