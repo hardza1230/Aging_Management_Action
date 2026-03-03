@@ -349,13 +349,11 @@ export function renderTable() {
                 <td class="p-2 align-top max-w-[280px]">
                     <div class="font-bold text-slate-900 text-sm leading-tight">${row.item} ${row.missingData ? '<span class="text-red-400 text-[10px]">⚠</span>' : ''}</div>
                     <div class="text-[11px] text-slate-500 truncate mt-0.5" title="${row.desc}">${row.desc}</div>
-                    <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                        <div class="text-[10px] text-indigo-600 font-semibold truncate" title="${row.reason}">📌 ${row.reason}</div>
-                        ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-500 truncate" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
-                    </div>
-                    <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                        <div class="text-[10px] text-slate-400">🗓 ขายล่าสุด: <span class="font-medium text-slate-500">${row.latestSale || '-'}</span></div>
-                        <div class="text-[10px] text-slate-400">🌐 สถานะบนคลาวด์: <span class="font-bold" style="color: ${getActionColor(row.sheetStatus)}">${row.sheetStatus || 'รอตรวจสอบ'}</span></div>
+                    <div class="text-[10px] text-indigo-600 font-semibold mt-1 truncate" title="${row.reason}">📌 ${row.reason}</div>
+                    ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-500 truncate mt-0.5" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
+                    <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
+                        <span>🗓 ท้ายเทรนด์: <span class="font-medium text-slate-500">${row.latestSale || '-'}</span></span>
+                        <span>🚩 สถานะเดิม: <span class="font-bold" style="color:${getActionColor(row.status || 'รอตรวจสอบ')}">${row.status || 'รอตรวจสอบ'}</span></span>
                     </div>
                 </td>
                 <td class="p-2 text-right text-xs text-orange-600 font-medium align-top whitespace-nowrap">${allowanceDisplay}</td>

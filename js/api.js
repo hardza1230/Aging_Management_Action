@@ -120,8 +120,8 @@ export function processData(rawData) {
                     allowance: map.allowance && row[map.allowance] ? String(row[map.allowance]).trim() : '-',
                     planRemark: map.planRemark && row[map.planRemark] ? String(row[map.planRemark]).trim() : '-',
                     latestSale: map.latestSale ? String(row[map.latestSale]).trim() : '-',
+                    status: sheetStatus, // Store original status from sheet
                     snapshotDate: map.snapshotDate ? String(row[map.snapshotDate]).trim() : '-',
-                    sheetStatus: sheetStatus,
                     missingData: (!rawDate || !reasonRaw || reasonRaw === '-')
                 });
             }
