@@ -42,27 +42,21 @@ export function findActualHeader(row, keywords) {
 
 export function findHeader(row, kwList) {
     const keys = Object.keys(row);
-    const cleanKws = kwList.map(kw => kw.trim().toLowerCase().replace(/\s/g, ''));
+    // Normalize: remove everything except consonants and numbers to be ultra-safe
+    const normalize = (s) => String(s).trim().toLowerCase().replace(/[^a-z0-9ก-ฮ]/g, '');
+    const cleanKws = kwList.map(kw => normalize(kw));
 
-    // 1. Strict Exact Match (Trimmed & Lowercase)
+    // 1. Exact match (normalized)
     for (let key of keys) {
-        const k = String(key).trim().toLowerCase();
-        if (kwList.some(kw => k === kw.trim().toLowerCase())) return key;
-    }
-
-    // 2. Strict Exact Match (No spaces)
-    for (let key of keys) {
-        const k = String(key).trim().toLowerCase().replace(/\s/g, '');
+        const k = normalize(key);
         if (cleanKws.some(ckw => k === ckw)) return key;
     }
 
-    // 3. Partial Match (Prefer longer keywords first to avoid 'po' matching 'over po'?) 
-    // Actually we iterate keys first.
+    // 2. Partial match
     for (let key of keys) {
-        const k = String(key).trim().toLowerCase().replace(/\s/g, '');
-        // We only return if the keyword is a SIGNIFICANT part or the key contains the keyword uniquely
+        const k = normalize(key);
         for (let ckw of cleanKws) {
-            if (k.length > 2 && k.includes(ckw)) return key;
+            if (ckw.length > 2 && (k.includes(ckw) || ckw.includes(k))) return key;
         }
     }
     return null;

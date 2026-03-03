@@ -57,7 +57,85 @@ export function updateDashboard() {
     renderPivotTable();
     renderFactoryTab();
     renderAnalysisTab(reasonMap);
+    renderProgressTab(); // New
     renderTable();
+}
+
+export function renderProgressTab() {
+    const tbody = document.getElementById('progressGridBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    // Group by snapshotDate
+    let history = {};
+    dataStore.allFilteredData.forEach(row => {
+        const date = row.snapshotDate || 'No Date';
+        if (!history[date]) history[date] = { date, skus: 0, overPo: 0, done: 0 };
+        history[date].skus++;
+        history[date].overPo += row.overPo;
+        const st = dataStore.actionStates[row._id] || "รอตรวจสอบ";
+        if (st === "ดำเนินการแล้ว") history[date].done++;
+    });
+
+    const sortedDates = Object.keys(history).sort((a, b) => new Date(a) - new Date(b));
+
+    let prevOver = null;
+    sortedDates.forEach(date => {
+        const data = history[date];
+        const donePct = data.skus ? Math.round((data.done / data.skus) * 100) : 0;
+
+        let diffHtml = '-';
+        if (prevOver !== null) {
+            const diff = data.overPo - prevOver;
+            const color = diff <= 0 ? 'text-green-600' : 'text-red-600';
+            const icon = diff <= 0 ? '⬇️' : '⬆️';
+            diffHtml = `<span class="${color} font-bold">${icon} ${Math.abs(diff).toLocaleString()}</span>`;
+        }
+        prevOver = data.overPo;
+
+        tbody.insertAdjacentHTML('beforeend', `
+            <tr>
+                <td class="p-3 font-medium">${date}</td>
+                <td class="p-3 text-right">${data.skus.toLocaleString()}</td>
+                <td class="p-3 text-right font-bold text-red-600">${data.overPo.toLocaleString()}</td>
+                <td class="p-3 text-right font-bold text-green-600">${donePct}%</td>
+                <td class="p-3">${diffHtml}</td>
+            </tr>
+        `);
+    });
+
+    // Update Trend Chart (Simplified)
+    const ctx = document.getElementById('trendChart')?.getContext('2d');
+    if (ctx) {
+        if (dataStore.charts.trend) dataStore.charts.trend.destroy();
+        dataStore.charts.trend = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: sortedDates,
+                datasets: [{
+                    label: 'ยอดรวมส่วนเกิน (Over PO)',
+                    data: sortedDates.map(d => history[d].overPo),
+                    borderColor: '#4f46e5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    // Velocity
+    if (sortedDates.length >= 2) {
+        const last = history[sortedDates[sortedDates.length - 1]];
+        const prev = history[sortedDates[sortedDates.length - 2]];
+        const v = prev.overPo ? Math.round(((prev.overPo - last.overPo) / prev.overPo) * 100) : 0;
+        document.getElementById('velocityText').textContent = (v >= 0 ? '+' : '') + v + '%';
+    }
 }
 
 window.setChartMode = function (mode, btn) {
