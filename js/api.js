@@ -88,7 +88,9 @@ export function processData(rawData) {
             const poVal = parseNum(row[map.hasPo]);
             const overVal = parseNum(row[map.overPo]);
 
-            if (overVal > 0 || stockVal > 0) {
+            // We change the condition: As long as there's stock OR overage, 
+            // we include it in allFilteredData so KPI cards can sum it up correctly.
+            if (stockVal > 0 || overVal > 0 || poVal > 0) {
                 const reasonRaw = map.reason && row[map.reason] ? String(row[map.reason]).trim() : '';
                 const rawDate = map.latestProduce ? row[map.latestProduce] : null;
                 const ageMonths = calculateAgeMonths(rawDate, row[map.age]);
@@ -99,7 +101,7 @@ export function processData(rawData) {
                     finalReason = 'รอข้อมูลวางแผน';
                 }
 
-                const rowId = `row_${i}_${row[map.item] || 'u'}`;
+                const rowId = `row_${i}_${row[map.item] || i}`;
                 const sheetStatus = map.actionStatus && row[map.actionStatus] ? String(row[map.actionStatus]).trim() : '';
                 if (sheetStatus) dataStore.actionStates[rowId] = sheetStatus;
 
@@ -110,11 +112,11 @@ export function processData(rawData) {
                     overPo: overVal,
                     reason: finalReason,
                     age: ageMonths,
-                    item: (row[map.item] || '-').trim(),
-                    desc: (row[map.desc] || '-').trim(),
-                    saleman: (row[map.saleman] || '-').trim(),
-                    customer: (row[map.customer] || '-').trim(),
-                    plant: (map.plant && row[map.plant] ? row[map.plant] : '-').trim(),
+                    item: String(row[map.item] || '-').trim(),
+                    desc: String(row[map.desc] || '-').trim(),
+                    saleman: String(row[map.saleman] || '-').trim(),
+                    customer: String(row[map.customer] || '-').trim(),
+                    plant: (map.plant && row[map.plant] ? String(row[map.plant]) : '-').trim(),
                     allowance: map.allowance ? parseNum(row[map.allowance]) : 0,
                     planRemark: map.planRemark && row[map.planRemark] ? String(row[map.planRemark]).trim() : '-',
                     latestSale: map.latestSale ? String(row[map.latestSale]).trim() : '-',
