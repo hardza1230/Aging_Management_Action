@@ -26,6 +26,7 @@ export const headerKeywords = {
     allowance: ['ค่าเผื่อ', 'allowance'],
     planRemark: ['planning remarks', 'planning remark', 'remark', 'หมายเหตุวางแผน'],
     latestSale: ['ขายล่าสุด', 'last sale', 'latest sale'],
+    hasPo: ['มีพีโอ', 'มี po', 'has po'],
     actionStatus: ['action (วิธีการ)', 'วิธีการ', 'สถานะการจัดการ', 'action status', 'status', 'จัดการ']
 };
 

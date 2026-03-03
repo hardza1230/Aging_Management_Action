@@ -64,6 +64,7 @@ export function processData(rawData) {
         allowance: findHeader(sr, headerKeywords.allowance),
         planRemark: findHeader(sr, headerKeywords.planRemark),
         latestSale: findHeader(sr, headerKeywords.latestSale),
+        hasPo: findHeader(sr, headerKeywords.hasPo),
         actionStatus: findHeader(sr, headerKeywords.actionStatus),
         snapshotDate: findHeader(sr, ['snapshot date', 'วันที่ดึงข้อมูล', 'วันที่'])
     };
@@ -78,8 +79,11 @@ export function processData(rawData) {
         let processed = [];
         let maxAgeFound = 0;
         rawData.forEach((row, i) => {
+            const stockVal = parseNum(row[map.stock]);
+            const poVal = parseNum(row[map.hasPo]);
             const overVal = parseNum(row[map.overPo]);
-            if (overVal > 0) {
+
+            if (overVal > 0 || stockVal > 0) {
                 const reasonRaw = map.reason && row[map.reason] ? String(row[map.reason]).trim() : '';
                 const rawDate = map.latestProduce ? row[map.latestProduce] : null;
                 const ageMonths = calculateAgeMonths(rawDate, row[map.age]);
@@ -96,6 +100,8 @@ export function processData(rawData) {
 
                 processed.push({
                     _id: rowId,
+                    stock: stockVal,
+                    hasPo: poVal,
                     overPo: overVal,
                     reason: finalReason,
                     age: ageMonths,

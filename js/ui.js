@@ -21,8 +21,10 @@ export function updateDashboard() {
 
     dataStore.activeData.forEach(row => {
         totalExceed += row.overPo;
-        if (row.overPo > 0) withPoCount++;
+        totalStockQty += row.stock || 0;
+        totalPoQty += row.hasPo || 0;
 
+        // Charts still focus on excess (overPo)
         reasonMap[row.reason] = (reasonMap[row.reason] || 0) + (state.chartMode === 'qty' ? row.overPo : 1);
         salesmanMap[row.saleman] = (salesmanMap[row.saleman] || 0) + row.overPo;
 
@@ -40,19 +42,15 @@ export function updateDashboard() {
     });
 
     const totalSkus = dataStore.activeData.length;
-    // For KPI Demo/Logic:
-    // 1. จํานวน รายการ (ไอเทม) -> totalSkus
-    // 2. สต็อกทั้งหมด (ใบ) -> We'll sum row.overPo + row.allowance as a proxy or just row.overPo if that's the "affected" stock
-    // Actually, usually users want the sum of the over-po pieces for "Stock (ใบ)" in this context.
 
-    // Let's calculate percentage
-    const overPoCount = dataStore.activeData.filter(r => r.overPo > 0).length;
-    const overPoPct = totalSkus ? Math.round((overPoCount / totalSkus) * 100) : 0;
+    // Percentages based on quantity relative to stock
+    const poPct = totalStockQty ? Math.round((totalPoQty / totalStockQty) * 100) : 0;
+    const overPct = totalStockQty ? Math.round((totalExceed / totalStockQty) * 100) : 0;
 
     document.getElementById('kpiTotalSkus').textContent = totalSkus.toLocaleString();
-    document.getElementById('kpiTotalStock').textContent = totalExceed.toLocaleString();
-    document.getElementById('kpiWithPo').innerHTML = `${withPoCount.toLocaleString()} <span class="text-xs font-normal opacity-70">(${withPoPct}%)</span>`;
-    document.getElementById('kpiOverPo').innerHTML = `${overPoCount.toLocaleString()} <span class="text-xs font-normal opacity-70">(${overPoPct}%)</span>`;
+    document.getElementById('kpiTotalStock').textContent = totalStockQty.toLocaleString();
+    document.getElementById('kpiWithPo').innerHTML = `${totalPoQty.toLocaleString()} <span class="text-xs font-normal opacity-70">(${poPct}%)</span>`;
+    document.getElementById('kpiOverPo').innerHTML = `${totalExceed.toLocaleString()} <span class="text-xs font-normal opacity-70">(${overPct}%)</span>`;
 
     updateProgressUI();
     updateCharts(reasonMap, ageBuckets, salesmanMap, actionCounts);
