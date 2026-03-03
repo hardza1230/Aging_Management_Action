@@ -47,7 +47,9 @@ export async function fetchGoogleSheet() {
 
 // Build column map from a sample row
 function buildMap(sr) {
-    return {
+    const allKeys = Object.keys(sr);
+    console.log("📋 Sheet headers:", allKeys);
+    const map = {
         overPo: findHeader(sr, headerKeywords.overPo),
         stock: findHeader(sr, headerKeywords.stock),
         reason: findHeader(sr, headerKeywords.reason),
@@ -65,6 +67,17 @@ function buildMap(sr) {
         snapshotDate: findHeader(sr, ['snapshot date', 'วันที่ดึงข้อมูล', 'วันที่', 'snapshot']),
         actionStatus: findHeader(sr, headerKeywords.actionStatus)
     };
+    console.log("📍 Column map:", map);
+    if (!map.actionStatus) {
+        console.warn("⚠️ actionStatus NOT MATCHED. Potential candidates:");
+        allKeys.forEach(k => {
+            const kn = k.toLowerCase();
+            if (kn.includes('สถานะ') || kn.includes('action') || kn.includes('status') || kn.includes('จัดการ')) {
+                console.warn(`   → "${k}"`);
+            }
+        });
+    }
+    return map;
 }
 
 // Date helper — handles Thai Buddhist Era and "Current" labels
