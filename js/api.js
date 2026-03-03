@@ -1,56 +1,53 @@
-import { GOOGLE_SHEET_URL, APPS_SCRIPT_API_URL, headerKeywords, dataStore, state } from './state.js';
+import { MASTER_SHEET_URL, CURRENT_SHEET_URL, APPS_SCRIPT_API_URL, headerKeywords, dataStore, state } from './state.js';
 import { parseNum, calculateAgeMonths, findHeader, showLoading, hideLoading } from './utils.js';
 
 export async function saveActionToSheet(rowId, status, item, plant, snapshotDate) {
-    if (!APPS_SCRIPT_API_URL) return; // ถ้าไม่ได้ระบุ URL ก็ข้ามไป (ใช้แค่ Local)
-
+    if (!APPS_SCRIPT_API_URL) return;
     try {
         const payload = { rowId, status, item, plant, snapshotDate, timestamp: new Date().toISOString() };
-        await fetch(APPS_SCRIPT_API_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify(payload),
-            headers: { 'Content-Type': 'application/json' }
-        });
+        await fetch(APPS_SCRIPT_API_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
         console.log(`📡 ซิงค์ข้อมูล "${status}" ของ ${item} (${plant}) ไปยัง Sheet แล้ว`);
-    } catch (e) {
-        console.error("Sheet sync failed", e);
-    }
+    } catch (e) { console.error("Sheet sync failed", e); }
 }
 
+// Parse CSV text into array of objects
+function parseCsv(csvText) {
+    return new Promise((resolve, reject) => {
+        Papa.parse(csvText, {
+            header: true, skipEmptyLines: true,
+            complete: (r) => resolve(r.data),
+            error: (e) => reject(e)
+        });
+    });
+}
+
+// Fetch a single sheet URL and return parsed rows
+async function fetchSheet(url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return parseCsv(await response.text());
+}
 
 export async function fetchGoogleSheet() {
-    showLoading(20, 'กำลังดึงข้อมูลจาก Google Sheets...');
+    showLoading(10, 'กำลังดึงข้อมูลจาก Google Sheets...');
     try {
-        const response = await fetch(GOOGLE_SHEET_URL);
-        if (!response.ok) throw new Error('ไม่สามารถเข้าถึง Google Sheets ได้');
-        const csvText = await response.text();
+        // Fetch Master_History and Current sheets in parallel
+        const [masterRows, currentRows] = await Promise.all([
+            fetchSheet(MASTER_SHEET_URL).catch(e => { console.warn('Master fetch failed:', e); return []; }),
+            fetchSheet(CURRENT_SHEET_URL).catch(e => { console.warn('Current fetch failed:', e); return []; })
+        ]);
 
-        Papa.parse(csvText, {
-            header: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-                showLoading(50, 'ประมวลผลข้อมูล...');
-                processData(results.data);
-            },
-            error: (err) => {
-                hideLoading();
-                alert('PapaParse error: ' + err.message);
-            }
-        });
+        showLoading(50, 'ประมวลผลข้อมูล...');
+        processData(masterRows, currentRows);
     } catch (err) {
         hideLoading();
         alert('Fetch error: ' + err.message);
     }
 }
 
-export function processData(rawData) {
-    if (rawData.length === 0) {
-        hideLoading();
-        return alert('ไฟล์ว่างเปล่า');
-    }
-    const sr = rawData[0];
-    const map = {
+// Build column map from a sample row
+function buildMap(sr) {
+    return {
         overPo: findHeader(sr, headerKeywords.overPo),
         stock: findHeader(sr, headerKeywords.stock),
         reason: findHeader(sr, headerKeywords.reason),
@@ -65,122 +62,145 @@ export function processData(rawData) {
         planRemark: findHeader(sr, headerKeywords.planRemark),
         latestSale: findHeader(sr, headerKeywords.latestSale),
         hasPo: findHeader(sr, headerKeywords.hasPo),
-        snapshotDate: findHeader(sr, ['snapshot date', 'วันที่ดึงข้อมูล', 'วันที่', 'snapshot'])
+        snapshotDate: findHeader(sr, ['snapshot date', 'วันที่ดึงข้อมูล', 'วันที่', 'snapshot']),
+        actionStatus: findHeader(sr, headerKeywords.actionStatus)
     };
-    map.actionStatus = findHeader(sr, headerKeywords.actionStatus);
+}
 
-    console.log("📍 Column Mapping Results:", map);
+// Date helper — handles Thai Buddhist Era and "Current" labels
+function getSortDate(s) {
+    if (!s) return new Date(0);
+    if (String(s).toLowerCase().includes('current') || String(s).includes('ล่าสุด')) return new Date(8640000000000000);
+    let d = new Date(s);
+    if (!isNaN(d)) return d;
+    const parts = String(s).split(/[\/\-\.]/);
+    if (parts.length === 3) {
+        let [a, b, c] = parts.map(Number);
+        if (c > 2500) c -= 543;
+        d = new Date(c, b - 1, a);
+    }
+    return isNaN(d) ? new Date(0) : d;
+}
 
-    if (!map.overPo || !map.stock) {
+// Parse a set of raw rows into processed item objects
+function parseRows(rawData, map, defaultSnapshot = 'Current') {
+    const rows = [];
+    rawData.forEach(row => {
+        const stockVal = parseNum(row[map.stock]);
+        const poVal = parseNum(row[map.hasPo]);
+        const overVal = parseNum(row[map.overPo]);
+        if (stockVal <= 0 && overVal <= 0 && poVal <= 0) return;
+
+        const reasonRaw = map.reason && row[map.reason] ? String(row[map.reason]).trim() : '';
+        const rawDate = map.latestProduce ? row[map.latestProduce] : null;
+        const ageMonths = calculateAgeMonths(rawDate, row[map.age]);
+        let finalReason = reasonRaw || 'รอข้อมูลวางแผน';
+        if (finalReason === '-') finalReason = 'รอข้อมูลวางแผน';
+
+        const snapVal = (map.snapshotDate && row[map.snapshotDate])
+            ? String(row[map.snapshotDate]).trim()
+            : defaultSnapshot;
+        const itemVal = String(row[map.item] || '-').trim();
+        const plantVal = (map.plant && row[map.plant] ? String(row[map.plant]) : '-').trim();
+        const rowId = `${itemVal}|${plantVal}|${snapVal}`;
+        const sheetStatus = (map.actionStatus && row[map.actionStatus])
+            ? String(row[map.actionStatus]).trim() : '';
+
+        rows.push({
+            _id: rowId,
+            stock: stockVal, hasPo: poVal, overPo: overVal,
+            reason: finalReason, age: ageMonths,
+            item: itemVal, desc: String(row[map.desc] || '-').trim(),
+            saleman: String(row[map.saleman] || '-').trim(),
+            customer: String(row[map.customer] || '-').trim(),
+            plant: plantVal,
+            allowance: (map.allowance && row[map.allowance]) ? String(row[map.allowance]).trim() : '-',
+            planRemark: (map.planRemark && row[map.planRemark]) ? String(row[map.planRemark]).trim() : '-',
+            latestSale: map.latestSale ? String(row[map.latestSale]).trim() : '-',
+            status: sheetStatus,
+            snapshotDate: snapVal,
+            missingData: (!rawDate || !reasonRaw || reasonRaw === '-')
+        });
+    });
+    return rows;
+}
+
+export function processData(masterRawData, currentRawData = []) {
+    const hasMaster = masterRawData && masterRawData.length > 0;
+    const hasCurrent = currentRawData && currentRawData.length > 0;
+
+    if (!hasMaster && !hasCurrent) {
         hideLoading();
-        const missing = [];
-        if (!map.stock) missing.push('"สต็อก"');
-        if (!map.overPo) missing.push('"เกินพีโอ"');
-        return alert('ไม่พบคอลัมน์ที่จำเป็น: ' + missing.join(' และ ') + '\nกรุณาตรวจสอบชื่อหัวตารางในไฟล์ Excel');
+        return alert('ไม่พบข้อมูลจากทั้งสองชีท กรุณาตรวจสอบการตั้งค่า URL');
     }
 
     showLoading(70, 'วิเคราะห์ข้อมูล...');
     setTimeout(async () => {
         try {
-            let processed = [];
+            // ── 1. MASTER HISTORY ──────────────────────────────────────────
+            let masterProcessed = [];
             let maxAgeFound = 0;
-            rawData.forEach((row, i) => {
-                const stockVal = parseNum(row[map.stock]);
-                const poVal = parseNum(row[map.hasPo]);
-                const overVal = parseNum(row[map.overPo]);
-
-                if (stockVal > 0 || overVal > 0 || poVal > 0) {
-                    const reasonRaw = map.reason && row[map.reason] ? String(row[map.reason]).trim() : '';
-                    const rawDate = map.latestProduce ? row[map.latestProduce] : null;
-                    const ageMonths = calculateAgeMonths(rawDate, row[map.age]);
-                    if (ageMonths > maxAgeFound) maxAgeFound = ageMonths;
-
-                    let finalReason = reasonRaw || 'รอข้อมูลวางแผน';
-                    if (finalReason === '-' || finalReason === '') finalReason = 'รอข้อมูลวางแผน';
-
-                    const snapshotVal = map.snapshotDate ? String(row[map.snapshotDate]).trim() : '-';
-                    const rowId = `${String(row[map.item] || '').trim()}|${(map.plant && row[map.plant] ? String(row[map.plant]) : '-').trim()}|${snapshotVal}`;
-                    const sheetStatus = map.actionStatus && row[map.actionStatus] ? String(row[map.actionStatus]).trim() : '';
-                    if (sheetStatus) dataStore.actionStates[rowId] = sheetStatus;
-
-                    processed.push({
-                        _id: rowId, stock: stockVal, hasPo: poVal, overPo: overVal,
-                        reason: finalReason, age: ageMonths,
-                        item: String(row[map.item] || '-').trim(),
-                        desc: String(row[map.desc] || '-').trim(),
-                        saleman: String(row[map.saleman] || '-').trim(),
-                        customer: String(row[map.customer] || '-').trim(),
-                        plant: (map.plant && row[map.plant] ? String(row[map.plant]) : '-').trim(),
-                        allowance: map.allowance && row[map.allowance] ? String(row[map.allowance]).trim() : '-',
-                        planRemark: map.planRemark && row[map.planRemark] ? String(row[map.planRemark]).trim() : '-',
-                        latestSale: map.latestSale ? String(row[map.latestSale]).trim() : '-',
-                        status: sheetStatus,
-                        snapshotDate: map.snapshotDate ? String(row[map.snapshotDate]).trim() : '-',
-                        missingData: (!rawDate || !reasonRaw || reasonRaw === '-')
-                    });
-                }
-            });
-
-            const uniqueDates = [...new Set(processed.map(d => d.snapshotDate))].filter(d => d && d !== '-');
-            if (uniqueDates.length > 0) {
-                const parseDate = (s) => {
-                    let d = new Date(s);
-                    if (!isNaN(d)) return d;
-                    const parts = String(s).split(/[\/\-\.]/);
-                    if (parts.length === 3) {
-                        let [a, b, c] = parts.map(Number);
-                        if (c > 2500) c -= 543;
-                        d = new Date(c, b - 1, a);
-                    }
-                    if (s && (String(s).toLowerCase().includes('current') || String(s).includes('ล่าสุด'))) return new Date(8640000000000000);
-                    return isNaN(d) ? new Date(0) : d;
-                };
-                uniqueDates.sort((a, b) => parseDate(a) - parseDate(b));
-                state.latestSnap = uniqueDates[uniqueDates.length - 1];
-                dataStore.snapDates = uniqueDates;
+            if (hasMaster) {
+                const masterMap = buildMap(masterRawData[0]);
+                masterProcessed = parseRows(masterRawData, masterMap);
+                masterProcessed.forEach(r => {
+                    if (r.age > maxAgeFound) maxAgeFound = r.age;
+                    if (r.status) dataStore.actionStates[r._id] = r.status;
+                });
             }
+            dataStore.allFilteredData = masterProcessed;
 
-            // 1. Build a map of the absolute latest recorded status for every Item+Plant in history
+            // Determine snapshot dates from Master
+            const uniqueDates = [...new Set(masterProcessed.map(d => d.snapshotDate))].filter(d => d && d !== '-');
+            uniqueDates.sort((a, b) => getSortDate(a) - getSortDate(b));
+            state.latestSnap = uniqueDates[uniqueDates.length - 1] || null;
+            dataStore.snapDates = uniqueDates;
+
+            // Build Item+Plant → latest status map from Master history
             const historyStatusMap = {};
-            // Use a simple date parsing helper for sorting
-            const getSortDate = (s) => {
-                let d = new Date(s);
-                if (!isNaN(d)) return d;
-                const parts = String(s).split(/[\/\-\.]/);
-                if (parts.length === 3) {
-                    let [a, b, c] = parts.map(Number);
-                    if (c > 2500) c -= 543;
-                    d = new Date(c, b - 1, a);
-                }
-                if (s && (String(s).toLowerCase().includes('current') || String(s).includes('ล่าสุด'))) return new Date(8640000000000000);
-                return isNaN(d) ? new Date(0) : d;
-            };
-
-            // Process from oldest to newest snapshot so the latest status wins
-            [...processed].sort((a, b) => getSortDate(a.snapshotDate) - getSortDate(b.snapshotDate)).forEach(row => {
-                if (row.status && row.status !== 'รอตรวจสอบ' && row.status !== '-') {
-                    historyStatusMap[`${row.item}|${row.plant}`] = row.status;
-                }
-            });
-
-            // 2. Apply historical status to current data if current is empty
-            processed.forEach(row => {
-                const currentStatus = dataStore.actionStates[row._id];
-                if (!currentStatus || currentStatus === 'รอตรวจสอบ' || currentStatus === '-') {
-                    const historicalStatus = historyStatusMap[`${row.item}|${row.plant}`];
-                    if (historicalStatus) {
-                        dataStore.actionStates[row._id] = historicalStatus;
+            [...masterProcessed]
+                .sort((a, b) => getSortDate(a.snapshotDate) - getSortDate(b.snapshotDate))
+                .forEach(row => {
+                    if (row.status && row.status !== '-') {
+                        historyStatusMap[`${row.item}|${row.plant}`] = row.status;
                     }
-                }
-            });
+                });
 
-            // Persistence and State
-            try { await localforage.setItem('inventoryActions', dataStore.actionStates); } catch (e) { }
-            dataStore.allFilteredData = processed;
-            dataStore.currentData = processed.filter(d => String(d.snapshotDate).toLowerCase().includes('current') || String(d.snapshotDate).includes('ล่าสุด'));
-            if (dataStore.currentData.length === 0 && state.latestSnap) {
-                dataStore.currentData = processed.filter(d => d.snapshotDate === state.latestSnap);
+            // ── 2. CURRENT SHEET ────────────────────────────────────────────
+            let currentProcessed = [];
+            if (hasCurrent) {
+                const currentMap = buildMap(currentRawData[0]);
+                currentProcessed = parseRows(currentRawData, currentMap, 'Current');
+                currentProcessed.forEach(r => {
+                    if (r.age > maxAgeFound) maxAgeFound = r.age;
+                    const key = `${r.item}|${r.plant}`;
+                    if (r.status) {
+                        dataStore.actionStates[r._id] = r.status;
+                    } else if (!dataStore.actionStates[r._id] && historyStatusMap[key]) {
+                        // Inherit latest status from Master history
+                        dataStore.actionStates[r._id] = historyStatusMap[key];
+                    }
+                });
             }
+
+            // Fallback: if Current sheet empty, use latest Master snapshot
+            if (currentProcessed.length === 0 && state.latestSnap) {
+                currentProcessed = masterProcessed.filter(d => d.snapshotDate === state.latestSnap);
+                currentProcessed.forEach(r => {
+                    const key = `${r.item}|${r.plant}`;
+                    if (!dataStore.actionStates[r._id] && historyStatusMap[key]) {
+                        dataStore.actionStates[r._id] = historyStatusMap[key];
+                    }
+                });
+            }
+            dataStore.currentData = currentProcessed;
+
+            console.log(`📊 Master=${dataStore.allFilteredData.length}, Current(Dashboard)=${dataStore.currentData.length}`);
+            console.log(`🔍 History Status Persistence: ${Object.keys(historyStatusMap).length} unique items with status found in history`);
+
+            // ── 3. PERSIST & FINISH ─────────────────────────────────────────
+            try { await localforage.setItem('inventoryActions', dataStore.actionStates); } catch (e) { }
+            try { await localforage.setItem('inventoryData', dataStore.allFilteredData); } catch (e) { }
 
             const ageMaxInput = document.getElementById('filterAgeMax');
             if (ageMaxInput) {
@@ -192,7 +212,6 @@ export function processData(rawData) {
                 document.getElementById('ageLabel').textContent = `${state.ageMin} - ${safeMaxAge} ด.`;
             }
 
-            await localforage.setItem('inventoryData', dataStore.allFilteredData);
             showLoading(100, 'สร้างแดชบอร์ด...');
             window.dispatchEvent(new CustomEvent('data-ready'));
         } catch (err) {
