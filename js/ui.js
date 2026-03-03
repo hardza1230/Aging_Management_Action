@@ -350,6 +350,7 @@ export function renderTable() {
                     <div class="text-[11px] text-slate-500 truncate mt-0.5" title="${row.desc}">${row.desc}</div>
                     <div class="text-[10px] text-indigo-600 font-semibold mt-1 truncate" title="${row.reason}">📌 ${row.reason}</div>
                     ${row.planRemark !== '-' ? `<div class="text-[10px] text-blue-500 truncate mt-0.5" title="${row.planRemark}">📝 ${row.planRemark}</div>` : ''}
+                    ${row.planningAction && row.planningAction !== '-' ? `<div class="text-[10px] text-amber-600 bg-amber-50 rounded px-1.5 py-0.5 mt-1 inline-block truncate" title="Action (วิธีการ) จากทีมวางแผน">📋 ${row.planningAction}</div>` : ''}
                     <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
                         <span>🗓 ท้ายเทรนด์: <span class="font-medium text-slate-500">${row.latestSale || '-'}</span></span>
                         <span>🚩 สถานะเดิม: <span class="font-bold" style="color:${getActionColor(row.status || 'รอตรวจสอบ')}">${row.status || 'รอตรวจสอบ'}</span></span>

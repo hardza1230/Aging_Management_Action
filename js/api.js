@@ -75,13 +75,15 @@ function buildMap(sr) {
         actionMethod: findExact('Action (วิธีการ)') || findHeader(sr, ['action (วิธีการ)', 'วิธีการ'])
     };
 
-    // Fallback: if no สถานะการจัดการ found, use actionMethod as status source
-    if (!map.actionStatus && map.actionMethod) {
-        console.warn("⚠️ 'สถานะการจัดการ' not found, falling back to 'Action (วิธีการ)'");
-        map.actionStatus = map.actionMethod;
+    // NOTE: Do NOT fall back to actionMethod if actionStatus is missing.
+    // They are two separate columns written by different authors.
+    // actionStatus (สถานะการจัดการ) = written by THIS web app / Apps Script
+    // actionMethod (Action วิธีการ) = written by planning team, read-only in this app
+    if (!map.actionStatus) {
+        console.warn("⚠️ 'สถานะการจัดการ' column not found. Status will not be pre-filled from sheet.");
     }
 
-    console.log("📍 Column map → actionStatus:", map.actionStatus, "| actionMethod:", map.actionMethod);
+    console.log("📍 actionStatus (สถานะการจัดการ):", map.actionStatus, "| actionMethod (read-only):", map.actionMethod);
     return map;
 }
 
@@ -122,15 +124,12 @@ function parseRows(rawData, map, defaultSnapshot = 'Current') {
         const plantVal = (map.plant && row[map.plant] ? String(row[map.plant]) : '-').trim();
         const rowId = `${itemVal}|${plantVal}|${snapVal}`;
 
-        // สถานะการจัดการ = official management status (primary)
-        const statusOfficial = (map.actionStatus && row[map.actionStatus])
+        // สถานะการจัดการ = status written by App Script (the only authoritative source)
+        const sheetStatus = (map.actionStatus && row[map.actionStatus])
             ? String(row[map.actionStatus]).trim() : '';
-        // Action (วิธีการ) = action method (secondary, for display only)
-        const statusMethod = (map.actionMethod && row[map.actionMethod])
+        // Action (วิธีการ) = read-only planning note, stored separately for display
+        const planningAction = (map.actionMethod && row[map.actionMethod])
             ? String(row[map.actionMethod]).trim() : '';
-
-        // Use official status as main status; fall back to method if empty
-        const sheetStatus = statusOfficial || statusMethod;
 
         rows.push({
             _id: rowId,
@@ -143,6 +142,7 @@ function parseRows(rawData, map, defaultSnapshot = 'Current') {
             allowance: (map.allowance && row[map.allowance]) ? String(row[map.allowance]).trim() : '-',
             planRemark: (map.planRemark && row[map.planRemark]) ? String(row[map.planRemark]).trim() : '-',
             latestSale: map.latestSale ? String(row[map.latestSale]).trim() : '-',
+            planningAction: planningAction, // Action (วิธีการ) from planning team — read-only display
             status: sheetStatus,
             snapshotDate: snapVal,
             missingData: (!rawDate || !reasonRaw || reasonRaw === '-')
